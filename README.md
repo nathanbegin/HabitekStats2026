@@ -1,6 +1,6 @@
 # HabiTEK Stats 2026
 
-Dashboard React/Vite pour les statistiques HabiTEK, prêt pour **Vercel + Supabase**.
+Dashboard React/Vite pour les statistiques **HabiTEK 2026**, prêt pour **Vercel + Supabase**. La plateforme 2026 présente uniquement les deux cabanes HabiTEK : **Code** et **PassiveHouse**.
 
 ## Architecture
 
@@ -108,3 +108,24 @@ Les types reconnus sont `sensor`, `camera` et `unknown`.
 Le frontend conserve actuellement le mapping des UUID Milesight de l'application 2025 afin de rester compatible avec le matériel existant. Si les capteurs 2026 utilisent de nouveaux DevEUI, modifier `DEVICE_UUID_BUILDING_MAP` dans `src/App.jsx`.
 
 L'historique PostgreSQL de l'ancien serveur n'est pas copié automatiquement vers Supabase.
+
+
+## Structure HabiTEK 2026
+
+La plateforme ne présente plus les équipes/bâtiments 2025. Elle est organisée ainsi :
+
+- **HabiTEK**
+  - **Cabane Code**
+  - **Cabane PassiveHouse**
+
+Le capteur extérieur est partagé entre les deux cabanes. Les capteurs intérieurs sont associés individuellement à chaque cabane.
+
+Les DevEUI peuvent être configurés dans Vercel avec :
+
+```
+VITE_CODE_INDOOR_DEVICE_UUID
+VITE_PASSIVEHOUSE_INDOOR_DEVICE_UUID
+VITE_OUTDOOR_DEVICE_UUID
+```
+
+Les valeurs présentes dans `.env.example` sont des valeurs de migration provenant de l'installation précédente. Remplace-les lorsque les DevEUI définitifs des capteurs 2026 sont connus.
