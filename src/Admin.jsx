@@ -173,6 +173,8 @@ export default function Admin() {
   const [gatewayStatusError, setGatewayStatusError] = useState("");
   const [gatewayManualSyncing, setGatewayManualSyncing] = useState(false);
   const [gatewayLastManualSync, setGatewayLastManualSync] = useState(null);
+  const [gatewayQuerying, setGatewayQuerying] = useState(false);
+  const [gatewayQueryMessage, setGatewayQueryMessage] = useState("");
 
   const mappedCount = useMemo(
     () => devices.filter((device) => device.assignment).length,
@@ -272,6 +274,10 @@ export default function Admin() {
         setGatewayStatusError(
           `État général disponible, mais détails énergie incomplets : ${payload.propertyError}`
         );
+      } else if (payload?.capabilitiesError) {
+        setGatewayStatusError(
+          `État disponible, mais services TSL non récupérés : ${payload.capabilitiesError}`
+        );
       }
     } catch (error) {
       setGatewayStatusError(error.message || "Impossible de charger l'état du SG50");
@@ -342,6 +348,68 @@ export default function Admin() {
       );
     } finally {
       setGatewayManualSyncing(false);
+    }
+  };
+
+  const queryGatewayNow = async () => {
+    if (gatewayQuerying) return;
+
+    setGatewayQuerying(true);
+    setGatewayQueryMessage("");
+    setGatewayStatusError("");
+
+    try {
+      const response = await fetch("/api/admin/gateway-query", {
+        method: "POST",
+        credentials: "same-origin",
+      });
+
+      const payload = await response.json().catch(() => ({}));
+
+      if (response.status === 401) {
+        setAuthenticated(false);
+        return;
+      }
+
+      if (response.status === 409) {
+        setGatewayQueryMessage(
+          payload.error ||
+            "Le SG50 ne publie pas de commande permettant de demander un nouveau rapport."
+        );
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Impossible d'interroger le SG50.");
+      }
+
+      setGatewayQueryMessage(
+        `Commande envoyée (${payload.serviceId || "service TSL"}). Attente du nouveau rapport…`
+      );
+
+      // The Milesight service invocation is asynchronous. Poll Supabase/logs
+      // first to catch the fresh webhook, then refresh Open API once.
+      window.setTimeout(() => {
+        loadDevices();
+        loadLogs();
+      }, 3000);
+
+      window.setTimeout(() => {
+        loadDevices();
+        loadLogs();
+        loadGatewayStatus();
+      }, 8000);
+
+      window.setTimeout(() => {
+        loadDevices();
+        loadLogs();
+      }, 15000);
+    } catch (error) {
+      setGatewayStatusError(
+        error.message || "Impossible d'interroger directement le SG50."
+      );
+    } finally {
+      setGatewayQuerying(false);
     }
   };
 
@@ -970,18 +1038,60 @@ export default function Admin() {
 
                       {isGateway ? (
                         <div className="text-sm">
-                          <div className="flex items-center justify-between gap-2 mb-1">
-                            <span className="block font-medium text-gray-700">Énergie SG50</span>
-                            <button
-                              type="button"
-                              onClick={syncGatewayEnergy}
-                              disabled={gatewayManualSyncing}
-                              className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                              title="Récupérer les dernières informations du webhook et de Milesight Open API"
-                            >
-                              <span aria-hidden="true" className={gatewayManualSyncing ? "animate-spin" : ""}>↻</span>
-                              {gatewayManualSyncing ? "Synchronisation…" : "Synchroniser"}
-                            </button>
+                          <div className="mb-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="block font-medium text-gray-700">Énergie SG50</span>
+                              <div className="flex flex-wrap gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={syncGatewayEnergy}
+                                  disabled={gatewayManualSyncing}
+                                  className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                                  title="Récupérer les dernières informations déjà disponibles"
+                                >
+                                  <span aria-hidden="true" className={gatewayManualSyncing ? "animate-spin" : ""}>↻</span>
+                                  {gatewayManualSyncing ? "Synchronisation…" : "Synchroniser"}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={queryGatewayNow}
+                                  disabled={
+                                    gatewayQuerying ||
+                                    !gatewayStatus?.capabilities?.statusQuerySupported
+                                  }
+                                  className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-600 disabled:cursor-not-allowed"
+                                  title={
+                                    gatewayStatus?.capabilities?.statusQuerySupported
+                                      ? `Forcer une nouvelle demande via ${gatewayStatus.capabilities.statusQueryService?.id || "le service TSL détecté"}`
+                                      : "Aucun service d'interrogation compatible détecté dans le TSL du SG50"
+                                  }
+                                >
+                                  <span aria-hidden="true">📡</span>
+                                  {gatewayQuerying ? "Interrogation…" : "Interroger SG50"}
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="mt-1 text-[11px]">
+                              {gatewayStatus?.capabilities?.statusQuerySupported ? (
+                                <span className="text-green-700">
+                                  Interrogation directe disponible :{" "}
+                                  <span className="font-mono">
+                                    {gatewayStatus.capabilities.statusQueryService?.id}
+                                  </span>
+                                </span>
+                              ) : gatewayStatus?.capabilities ? (
+                                <span className="text-gray-500">
+                                  Aucun service de demande d’état compatible détecté dans le TSL
+                                  ({gatewayStatus.capabilities.serviceCount || 0} service(s) publié(s)).
+                                </span>
+                              ) : (
+                                <span className="text-gray-400">
+                                  Détection des commandes SG50…
+                                </span>
+                              )}
+                            </div>
                           </div>
                           <div className="w-full border rounded-xl px-3 py-2 bg-gray-50 text-gray-700 space-y-1">
                             <div className="flex items-center justify-between gap-2">
@@ -1036,6 +1146,11 @@ export default function Admin() {
                                 )}
                             </div>
                           </div>
+                          {gatewayQueryMessage && (
+                            <div className="mt-2 rounded-lg bg-blue-50 border border-blue-100 px-2.5 py-2 text-xs text-blue-800">
+                              {gatewayQueryMessage}
+                            </div>
+                          )}
                           {gatewayLastManualSync && (
                             <div className="mt-2 text-[11px] text-gray-500">
                               Dernière synchronisation manuelle : {formatDate(gatewayLastManualSync)}
