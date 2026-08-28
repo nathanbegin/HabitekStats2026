@@ -45,6 +45,10 @@ export default function Admin() {
   const [logsLoading, setLogsLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [logsError, setLogsError] = useState("");
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetError, setResetError] = useState("");
 
   const mappedCount = useMemo(
     () => devices.filter((device) => device.assignment).length,
@@ -235,6 +239,60 @@ export default function Admin() {
     setMessage("Assignation enregistrée.");
   };
 
+  const openResetDialog = () => {
+    setResetPassword("");
+    setResetError("");
+    setResetOpen(true);
+  };
+
+  const closeResetDialog = () => {
+    if (resetLoading) return;
+    setResetOpen(false);
+    setResetPassword("");
+    setResetError("");
+  };
+
+  const resetStatistics = async (event) => {
+    event.preventDefault();
+    setResetLoading(true);
+    setResetError("");
+
+    try {
+      const response = await fetch("/api/admin/reset-stats", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          password: resetPassword,
+          confirmation: "RESET_STATS",
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+
+      if (response.status === 401) {
+        setResetError("Mot de passe administrateur invalide.");
+        return;
+      }
+
+      if (!response.ok) {
+        setResetError(payload.error || "La remise à zéro a échoué.");
+        return;
+      }
+
+      setResetOpen(false);
+      setResetPassword("");
+      setMessage(
+        `Statistiques remises à zéro : ${payload.deleted_measurements || 0} mesure(s) supprimée(s). Les DevEUI, surnoms et assignations ont été conservés.`
+      );
+      await loadDevices();
+    } catch {
+      setResetError("Impossible de communiquer avec le serveur.");
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   if (authenticated === null || (loading && authenticated !== false)) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center p-6">
@@ -407,6 +465,29 @@ export default function Admin() {
           )}
         </section>
 
+        <section className="bg-white rounded-2xl shadow p-4 sm:p-5 mb-5 border border-red-100">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <div className="text-xs font-bold uppercase tracking-wide text-red-600 mb-1">
+                Maintenance
+              </div>
+              <h2 className="text-lg font-bold text-gray-900">Remise à zéro des statistiques</h2>
+              <p className="text-sm text-gray-600 mt-1 max-w-3xl">
+                À utiliser à la fin de la phase de test. Cette action supprime tout l'historique de température et d'humidité
+                ainsi que les dernières mesures affichées. Les DevEUI, surnoms, assignations et logs webhook sont conservés,
+                afin de réutiliser exactement la même configuration pour le déploiement réel.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={openResetDialog}
+              className="shrink-0 px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700"
+            >
+              Remettre les statistiques à zéro
+            </button>
+          </div>
+        </section>
+
         <section>
           <div className="flex items-end justify-between gap-3 mb-3">
             <div>
@@ -499,6 +580,73 @@ export default function Admin() {
             </div>
           )}
         </section>
+
+        {resetOpen && (
+          <div
+            className="fixed inset-0 z-[10000] bg-black/50 flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reset-stats-title"
+          >
+            <form
+              onSubmit={resetStatistics}
+              className="w-full max-w-lg bg-white rounded-2xl shadow-2xl p-6"
+            >
+              <div className="w-11 h-11 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-xl font-bold mb-4">
+                !
+              </div>
+              <h2 id="reset-stats-title" className="text-xl font-bold text-gray-900">
+                Confirmer la remise à zéro
+              </h2>
+              <p className="text-sm text-gray-600 mt-2">
+                Cette opération est irréversible. Toutes les mesures historiques de la phase de test seront supprimées.
+                La configuration des capteurs sera conservée.
+              </p>
+
+              <div className="mt-4 rounded-xl bg-red-50 border border-red-100 p-3 text-sm text-red-800">
+                Pour confirmer, saisis de nouveau le mot de passe administrateur.
+              </div>
+
+              <label className="block text-sm font-medium text-gray-700 mt-5 mb-2" htmlFor="reset-admin-password">
+                Mot de passe administrateur
+              </label>
+              <input
+                id="reset-admin-password"
+                type="password"
+                autoComplete="current-password"
+                value={resetPassword}
+                onChange={(event) => setResetPassword(event.target.value)}
+                className="w-full border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-red-500"
+                autoFocus
+                required
+              />
+
+              {resetError && (
+                <div className="mt-3 rounded-xl bg-red-50 border border-red-100 text-red-700 px-3 py-2 text-sm">
+                  {resetError}
+                </div>
+              )}
+
+              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-6">
+                <button
+                  type="button"
+                  onClick={closeResetDialog}
+                  disabled={resetLoading}
+                  className="px-4 py-2 border rounded-xl text-sm font-semibold hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={resetLoading || !resetPassword}
+                  className="px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 disabled:opacity-50"
+                >
+                  {resetLoading ? "Remise à zéro…" : "Confirmer la remise à zéro"}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
       </div>
     </div>
   );
