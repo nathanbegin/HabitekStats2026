@@ -75,11 +75,38 @@ export default async function handler(req, res) {
     }
 
     const supabase = getSupabaseAdmin();
-    const { error } = await supabase.from("device_data").insert(rows);
 
-    if (error) throw error;
+    const { error: insertError } = await supabase.from("device_data").insert(rows);
+    if (insertError) throw insertError;
 
-    return res.status(200).json({ status: "OK", inserted: rows.length });
+    // Register every DevEUI automatically so it becomes available in /admin.
+    // Keep only the newest event for each device when Milesight sends a batch.
+    const devicesByUuid = new Map();
+    rows.forEach((row) => {
+      const current = devicesByUuid.get(row.device_uuid);
+      if (!current || new Date(row.timestamp) > new Date(current.last_seen_at)) {
+        devicesByUuid.set(row.device_uuid, {
+          device_uuid: row.device_uuid,
+          last_seen_at: row.timestamp,
+          record_type: row.record_type,
+          latest_data: row.data || {},
+          updated_at: new Date().toISOString(),
+        });
+      }
+    });
+
+    const deviceRows = Array.from(devicesByUuid.values());
+    const { error: registryError } = await supabase
+      .from("milesight_devices")
+      .upsert(deviceRows, { onConflict: "device_uuid" });
+
+    if (registryError) throw registryError;
+
+    return res.status(200).json({
+      status: "OK",
+      inserted: rows.length,
+      devices_seen: deviceRows.length,
+    });
   } catch (error) {
     console.error("[api/milesight-webhook]", error);
     return res.status(400).json({ error: "Invalid webhook payload" });
