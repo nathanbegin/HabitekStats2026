@@ -129,3 +129,54 @@ VITE_OUTDOOR_DEVICE_UUID
 ```
 
 Les valeurs présentes dans `.env.example` sont des valeurs de migration provenant de l'installation précédente. Remplace-les lorsque les DevEUI définitifs des capteurs 2026 sont connus.
+
+
+## Administration des capteurs Milesight 2026
+
+La plateforme possède maintenant une console d'administration accessible à :
+
+```
+/admin
+```
+
+Exemple avec le domaine recommandé :
+
+```
+https://stats.habitek.ca/admin
+```
+
+Ajouter dans les variables d'environnement Vercel :
+
+```
+ADMIN_PASSWORD=un_mot_de_passe_long_et_unique
+```
+
+Le mot de passe n'est jamais envoyé au frontend au chargement de la page. Une connexion réussie crée un cookie de session `HttpOnly`, `SameSite=Strict` et `Secure` en production.
+
+### Fonctionnement
+
+Chaque webhook Milesight reçu :
+
+1. enregistre la mesure dans `device_data`;
+2. extrait le `devEUI` (ou le numéro de série en secours);
+3. crée ou met à jour automatiquement le DevEUI dans `milesight_devices`;
+4. le DevEUI devient visible dans `/admin`.
+
+Dans `/admin`, chaque DevEUI peut être assigné à :
+
+- **Code — intérieur**
+- **PassiveHouse — intérieur**
+- **Extérieur — partagé**
+- **Non assigné**
+
+Les assignations sont enregistrées dans Supabase et le dashboard recharge automatiquement les mappings environ toutes les 60 secondes. Aucun redéploiement Vercel n'est nécessaire lorsqu'une assignation change.
+
+### Mise à jour Supabase requise
+
+Après cette mise à jour, réexécuter entièrement :
+
+```
+supabase/schema.sql
+```
+
+dans **Supabase → SQL Editor**. Le script est idempotent et ajoute notamment la table `milesight_devices`.
