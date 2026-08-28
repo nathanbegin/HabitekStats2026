@@ -171,6 +171,8 @@ export default function Admin() {
   const [gatewayStatus, setGatewayStatus] = useState(null);
   const [gatewayStatusLoading, setGatewayStatusLoading] = useState(false);
   const [gatewayStatusError, setGatewayStatusError] = useState("");
+  const [gatewayManualSyncing, setGatewayManualSyncing] = useState(false);
+  const [gatewayLastManualSync, setGatewayLastManualSync] = useState(null);
 
   const mappedCount = useMemo(
     () => devices.filter((device) => device.assignment).length,
@@ -282,6 +284,65 @@ export default function Admin() {
     loadDevices();
     loadLogs();
     loadGatewayStatus();
+  };
+
+  const syncGatewayEnergy = async () => {
+    if (gatewayManualSyncing) return;
+
+    setGatewayManualSyncing(true);
+    setGatewayStatusError("");
+
+    try {
+      const [devicesResponse, gatewayResponse] = await Promise.all([
+        fetch("/api/admin/devices", {
+          credentials: "same-origin",
+          cache: "no-store",
+        }),
+        fetch("/api/admin/gateway-status", {
+          credentials: "same-origin",
+          cache: "no-store",
+        }),
+      ]);
+
+      if (devicesResponse.status === 401 || gatewayResponse.status === 401) {
+        setAuthenticated(false);
+        return;
+      }
+
+      const [devicesPayload, gatewayPayload] = await Promise.all([
+        devicesResponse.json().catch(() => []),
+        gatewayResponse.json().catch(() => ({})),
+      ]);
+
+      if (!devicesResponse.ok) {
+        throw new Error("Impossible de récupérer le dernier webhook du gateway.");
+      }
+
+      if (!gatewayResponse.ok) {
+        throw new Error(
+          gatewayPayload.error || "Impossible de récupérer les informations Milesight du SG50."
+        );
+      }
+
+      setDevices(Array.isArray(devicesPayload) ? devicesPayload : []);
+      setGatewayStatus(gatewayPayload);
+
+      if (gatewayPayload?.configured === false && gatewayPayload?.error) {
+        setGatewayStatusError(gatewayPayload.error);
+      } else if (gatewayPayload?.propertyError) {
+        setGatewayStatusError(
+          `État général disponible, mais détails énergie incomplets : ${gatewayPayload.propertyError}`
+        );
+      }
+
+      setGatewayLastManualSync(new Date().toISOString());
+    } catch (error) {
+      setGatewayStatusError(
+        error.message || "Impossible de synchroniser les informations du gateway."
+      );
+    } finally {
+      setGatewayManualSyncing(false);
+    }
   };
 
   useEffect(() => {
@@ -909,7 +970,19 @@ export default function Admin() {
 
                       {isGateway ? (
                         <div className="text-sm">
-                          <span className="block font-medium text-gray-700 mb-1">Énergie SG50</span>
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="block font-medium text-gray-700">Énergie SG50</span>
+                            <button
+                              type="button"
+                              onClick={syncGatewayEnergy}
+                              disabled={gatewayManualSyncing}
+                              className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                              title="Récupérer les dernières informations du webhook et de Milesight Open API"
+                            >
+                              <span aria-hidden="true" className={gatewayManualSyncing ? "animate-spin" : ""}>↻</span>
+                              {gatewayManualSyncing ? "Synchronisation…" : "Synchroniser"}
+                            </button>
+                          </div>
                           <div className="w-full border rounded-xl px-3 py-2 bg-gray-50 text-gray-700 space-y-1">
                             <div className="flex items-center justify-between gap-2">
                               <span>🔋 Batterie</span>
@@ -963,6 +1036,11 @@ export default function Admin() {
                                 )}
                             </div>
                           </div>
+                          {gatewayLastManualSync && (
+                            <div className="mt-2 text-[11px] text-gray-500">
+                              Dernière synchronisation manuelle : {formatDate(gatewayLastManualSync)}
+                            </div>
+                          )}
                           {gatewayStatusError && (
                             <div className="mt-2 text-xs text-amber-700">
                               {gatewayStatusError}
