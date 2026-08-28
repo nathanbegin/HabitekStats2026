@@ -54,33 +54,114 @@ function normalizeEvent(evt) {
   };
 }
 
+function requestMeta(req) {
+  const forwarded = String(req.headers["x-forwarded-for"] || "")
+    .split(",")[0]
+    .trim();
+
+  return {
+    source_ip: forwarded || req.headers["x-real-ip"] || null,
+    user_agent: req.headers["user-agent"] || null,
+    request_id: req.headers["x-vercel-id"] || req.headers["x-request-id"] || null,
+  };
+}
+
+async function writeWebhookLog(supabase, fields) {
+  if (!supabase) return;
+  try {
+    const { error } = await supabase.from("webhook_events").insert({
+      ...requestMeta(fields.req),
+      status: fields.status,
+      http_status: fields.http_status,
+      authorized: fields.authorized,
+      event_count: fields.event_count ?? 0,
+      inserted_count: fields.inserted_count ?? 0,
+      device_uuids: fields.device_uuids ?? [],
+      record_types: fields.record_types ?? [],
+      message: fields.message ?? null,
+    });
+
+    if (error) {
+      console.error("[webhook log insert]", error);
+    }
+  } catch (error) {
+    console.error("[webhook log insert]", error);
+  }
+}
+
 export default async function handler(req, res) {
+  let supabase;
+
+  try {
+    supabase = getSupabaseAdmin();
+  } catch (error) {
+    console.error("[api/milesight-webhook] Supabase config error", error);
+    return res.status(500).json({ error: "Server configuration error" });
+  }
+
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
+    await writeWebhookLog(supabase, {
+      req,
+      status: "rejected",
+      http_status: 405,
+      authorized: null,
+      message: `Méthode ${req.method} rejetée`,
+    });
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  if (!isAuthorized(req)) {
+  const authorized = isAuthorized(req);
+
+  if (!authorized) {
+    await writeWebhookLog(supabase, {
+      req,
+      status: "rejected",
+      http_status: 401,
+      authorized: false,
+      message: "Webhook reçu, mais secret invalide",
+    });
     return res.status(401).json({ error: "Unauthorized" });
   }
 
+  let events;
+
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-    const events = Array.isArray(body) ? body : [body];
+    events = Array.isArray(body) ? body : [body];
+  } catch (error) {
+    console.error("[api/milesight-webhook] JSON parse error", error);
+    await writeWebhookLog(supabase, {
+      req,
+      status: "error",
+      http_status: 400,
+      authorized: true,
+      message: "Webhook reçu, mais JSON invalide",
+    });
+    return res.status(400).json({ error: "Invalid JSON payload" });
+  }
 
-    const rows = events.map(normalizeEvent).filter(Boolean);
+  const rows = events.map(normalizeEvent).filter(Boolean);
+  const deviceUuids = [...new Set(rows.map((row) => row.device_uuid))];
+  const recordTypes = [...new Set(rows.map((row) => row.record_type))];
 
-    if (rows.length === 0) {
-      return res.status(200).json({ status: "OK", inserted: 0 });
-    }
+  if (rows.length === 0) {
+    await writeWebhookLog(supabase, {
+      req,
+      status: "ignored",
+      http_status: 200,
+      authorized: true,
+      event_count: events.length,
+      inserted_count: 0,
+      message: "Webhook reçu, mais aucun DevEUI/numéro de série exploitable",
+    });
+    return res.status(200).json({ status: "OK", inserted: 0 });
+  }
 
-    const supabase = getSupabaseAdmin();
-
+  try {
     const { error: insertError } = await supabase.from("device_data").insert(rows);
     if (insertError) throw insertError;
 
-    // Register every DevEUI automatically so it becomes available in /admin.
-    // Keep only the newest event for each device when Milesight sends a batch.
     const devicesByUuid = new Map();
     rows.forEach((row) => {
       const current = devicesByUuid.get(row.device_uuid);
@@ -102,6 +183,18 @@ export default async function handler(req, res) {
 
     if (registryError) throw registryError;
 
+    await writeWebhookLog(supabase, {
+      req,
+      status: "processed",
+      http_status: 200,
+      authorized: true,
+      event_count: events.length,
+      inserted_count: rows.length,
+      device_uuids: deviceUuids,
+      record_types: recordTypes,
+      message: `${rows.length} événement(s) enregistré(s)`,
+    });
+
     return res.status(200).json({
       status: "OK",
       inserted: rows.length,
@@ -109,6 +202,21 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     console.error("[api/milesight-webhook]", error);
-    return res.status(400).json({ error: "Invalid webhook payload" });
+
+    await writeWebhookLog(supabase, {
+      req,
+      status: "error",
+      http_status: 500,
+      authorized: true,
+      event_count: events.length,
+      inserted_count: 0,
+      device_uuids: deviceUuids,
+      record_types: recordTypes,
+      message: error?.message
+        ? `Erreur traitement: ${String(error.message).slice(0, 300)}`
+        : "Erreur inconnue pendant le traitement",
+    });
+
+    return res.status(500).json({ error: "Webhook processing failed" });
   }
 }
