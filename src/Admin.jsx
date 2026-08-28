@@ -23,6 +23,24 @@ function formatDate(value) {
     : date.toLocaleString("fr-CA", { dateStyle: "medium", timeStyle: "medium" });
 }
 
+const GATEWAY_ONLINE_WINDOW_MS = 30 * 60 * 1000;
+
+function isGatewayDevice(device) {
+  if (!device) return false;
+  const nickname = String(device.nickname || "").toLowerCase();
+  return (
+    device.record_type === "unknown" ||
+    nickname.includes("gateway") ||
+    nickname.includes("sg50")
+  );
+}
+
+function gatewayIsOnline(device) {
+  const lastSeen = new Date(device?.last_seen_at || "").getTime();
+  if (!Number.isFinite(lastSeen)) return false;
+  return Date.now() - lastSeen <= GATEWAY_ONLINE_WINDOW_MS;
+}
+
 function StatusBadge({ status }) {
   const meta = STATUS_META[status] || {
     label: status || "Inconnu",
@@ -566,7 +584,7 @@ export default function Admin() {
             <div>
               <h2 className="text-lg font-bold text-gray-900">Capteurs détectés</h2>
               <p className="text-sm text-gray-600">
-                Les DevEUI apparaissent automatiquement dès qu'un webhook valide est traité. Tu peux leur donner un surnom pour les reconnaître rapidement.
+                Les DevEUI apparaissent automatiquement dès qu'un webhook valide est traité. Le gateway est identifié séparément avec son état en ligne/hors ligne selon l'heure du dernier webhook.
               </p>
             </div>
           </div>
@@ -579,17 +597,48 @@ export default function Admin() {
             <div className="space-y-3">
               {devices.map((device) => {
                 const values = device.latest_data || {};
+                const isGateway = isGatewayDevice(device);
+                const gatewayOnline = isGateway ? gatewayIsOnline(device) : false;
                 return (
                   <div key={device.device_uuid} className="bg-white rounded-2xl shadow p-4">
                     <div className="grid grid-cols-1 lg:grid-cols-[1.25fr_1fr_1fr_1fr] gap-4 items-center">
                       <div>
-                        <div className="text-xs uppercase tracking-wide text-gray-400">DevEUI</div>
+                        <div className="flex items-center gap-2">
+                          {isGateway && (
+                            <span
+                              className={`inline-block h-2.5 w-2.5 rounded-full ${
+                                gatewayOnline ? "bg-green-500" : "bg-red-500"
+                              }`}
+                              title={
+                                gatewayOnline
+                                  ? "Gateway en ligne — webhook reçu dans les 30 dernières minutes"
+                                  : "Gateway hors ligne — aucun webhook récent"
+                              }
+                              aria-label={gatewayOnline ? "Gateway en ligne" : "Gateway hors ligne"}
+                            />
+                          )}
+                          <div className="text-xs uppercase tracking-wide text-gray-400">DevEUI</div>
+                        </div>
                         <div className="font-mono font-semibold text-gray-900 break-all">
                           {device.device_uuid}
                         </div>
                         <div className="text-xs text-gray-500 mt-2">
                           Dernier webhook : {formatDate(device.last_seen_at)}
                         </div>
+                        {isGateway && (
+                          <div
+                            className={`mt-1 inline-flex items-center gap-1.5 text-xs font-semibold ${
+                              gatewayOnline ? "text-green-700" : "text-red-700"
+                            }`}
+                          >
+                            <span
+                              className={`inline-block h-2 w-2 rounded-full ${
+                                gatewayOnline ? "bg-green-500" : "bg-red-500"
+                              }`}
+                            />
+                            {gatewayOnline ? "En ligne" : "Hors ligne"}
+                          </div>
+                        )}
                       </div>
 
                       <div className="text-sm">
@@ -624,28 +673,47 @@ export default function Admin() {
                       </div>
 
                       <div className="text-sm text-gray-700">
-                        <div><strong>Type :</strong> {device.record_type || "—"}</div>
                         <div>
-                          <strong>Dernière mesure :</strong>{" "}
-                          {values.temperature !== undefined ? `${values.temperature} °C` : "—"}
-                          {values.humidity !== undefined ? ` · ${values.humidity} %` : ""}
+                          <strong>Type :</strong>{" "}
+                          {isGateway ? "Gateway LoRaWAN SG50" : (device.record_type || "—")}
                         </div>
+                        {isGateway ? (
+                          <div className="mt-1">
+                            <strong>Dernière activité :</strong>{" "}
+                            {formatDate(device.last_seen_at)}
+                          </div>
+                        ) : (
+                          <div>
+                            <strong>Dernière mesure :</strong>{" "}
+                            {values.temperature !== undefined ? `${values.temperature} °C` : "—"}
+                            {values.humidity !== undefined ? ` · ${values.humidity} %` : ""}
+                          </div>
+                        )}
                       </div>
 
-                      <label className="text-sm">
-                        <span className="block font-medium text-gray-700 mb-1">Assignation</span>
-                        <select
-                          value={device.assignment || "unassigned"}
-                          onChange={(event) => assign(device.device_uuid, event.target.value)}
-                          className="w-full border rounded-xl px-3 py-2 bg-white"
-                        >
-                          {ASSIGNMENTS.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                      {isGateway ? (
+                        <div className="text-sm">
+                          <span className="block font-medium text-gray-700 mb-1">Rôle</span>
+                          <div className="w-full border rounded-xl px-3 py-2 bg-gray-50 text-gray-700">
+                            Passerelle LoRaWAN
+                          </div>
+                        </div>
+                      ) : (
+                        <label className="text-sm">
+                          <span className="block font-medium text-gray-700 mb-1">Assignation</span>
+                          <select
+                            value={device.assignment || "unassigned"}
+                            onChange={(event) => assign(device.device_uuid, event.target.value)}
+                            className="w-full border rounded-xl px-3 py-2 bg-white"
+                          >
+                            {ASSIGNMENTS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
                     </div>
                   </div>
                 );
