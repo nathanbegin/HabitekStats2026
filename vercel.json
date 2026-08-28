@@ -1,6 +1,10 @@
 {
   "framework": "vite",
   "cleanUrls": true,
+  "rewrites": [
+    { "source": "/admin", "destination": "/index.html" },
+    { "source": "/admin/:path*", "destination": "/index.html" }
+  ],
   "headers": [
     {
       "source": "/api/(.*)",
