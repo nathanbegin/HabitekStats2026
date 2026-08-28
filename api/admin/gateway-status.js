@@ -1,5 +1,6 @@
 import { isAdminRequest } from "../../lib/adminAuth.js";
 import {
+  getSg50Capabilities,
   getSg50Status,
   isMilesightOpenApiConfigured,
 } from "../../lib/milesightOpenApi.js";
@@ -26,9 +27,21 @@ export default async function handler(req, res) {
 
   try {
     const status = await getSg50Status();
+
+    let capabilities = null;
+    let capabilitiesError = null;
+    try {
+      capabilities = await getSg50Capabilities(status?.gateway?.deviceId || null);
+    } catch (error) {
+      capabilitiesError =
+        error?.message || "Impossible de récupérer les services TSL du SG50.";
+    }
+
     return res.status(200).json({
       configured: true,
       ...status,
+      capabilities,
+      capabilitiesError,
     });
   } catch (error) {
     console.error("[api/admin/gateway-status]", error);
