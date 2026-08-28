@@ -145,25 +145,11 @@ const AVAILABLE_KEYS = [
   { key: "humidity_ext", label: "Humidité extérieure (%)", labelEn: "Outdoor Humidity (%)", color: "#ef4444" }  // Red
 ];
 
-// HabiTEK 2026 has two cabins: Code and PassiveHouse.
-// Legacy UUIDs are retained as migration defaults until the 2026 DevEUI values are confirmed.
-// Update these three values when the 2026 sensors are assigned.
-const CODE_INDOOR_DEVICE_UUID =
-  import.meta.env.VITE_CODE_INDOOR_DEVICE_UUID || '24E124785F162247';
-const PASSIVEHOUSE_INDOOR_DEVICE_UUID =
-  import.meta.env.VITE_PASSIVEHOUSE_INDOOR_DEVICE_UUID || '24E124785F160861';
-const OUTDOOR_DEVICE_UUID =
-  import.meta.env.VITE_OUTDOOR_DEVICE_UUID || '24E124785F162605';
-
+// HabiTEK 2026 has two cabins. DevEUI assignments are managed from /admin
+// and loaded dynamically from Supabase through /api/device-mappings.
 const CABINS = ['Code', 'PassiveHouse'];
 
-const DEVICE_UUID_BUILDING_MAP = {
-  [CODE_INDOOR_DEVICE_UUID]: { appliesTo: ['Code'], type: 'indoor' },
-  [PASSIVEHOUSE_INDOOR_DEVICE_UUID]: { appliesTo: ['PassiveHouse'], type: 'indoor' },
-  [OUTDOOR_DEVICE_UUID]: { appliesTo: CABINS, type: 'outdoor' },
-};
-
-// WebSocket server URL
+// Supabase Realtime client
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase = supabaseUrl && supabaseAnonKey
@@ -186,6 +172,7 @@ function AppContent() {
   const [data, setData] = useState([]); // Stores data for the currently selected building for charts
   const [comparisonData, setComparisonData] = useState([]); // Stores data for both HabiTEK cabins for comparison chart
   const [latestStats, setLatestStats] = useState({}); // Stores the very latest stats for each building (for current conditions panel)
+  const [deviceMap, setDeviceMap] = useState({}); // DevEUI assignments managed from /admin
   const [snapshotUrl, setSnapshotUrl] = useState(''); // URL for camera snapshot
   const [compareBuildings, setCompareBuildings] = useState(['Code', 'PassiveHouse']); // Buildings selected for comparison
   const [compareSeries, setCompareSeries] = useState([]); // Formatted series for comparison chart
@@ -215,6 +202,35 @@ function AppContent() {
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Load DevEUI assignments created in the admin console.
+  // Refresh periodically so an open dashboard picks up admin changes without redeployment.
+  useEffect(() => {
+    let active = true;
+
+    const loadDeviceMappings = async () => {
+      try {
+        const response = await fetch('/api/device-mappings', { cache: 'no-store' });
+        if (!response.ok) throw new Error(`Device mapping API: ${response.status}`);
+        const nextMap = await response.json();
+        if (active) {
+          setDeviceMap((current) =>
+            JSON.stringify(current) === JSON.stringify(nextMap) ? current : nextMap
+          );
+        }
+      } catch (error) {
+        console.error('[device mappings]', error);
+      }
+    };
+
+    loadDeviceMappings();
+    const id = setInterval(loadDeviceMappings, 60 * 1000);
+
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
   }, []);
 
   const getTimeWindow = () => {
@@ -339,7 +355,7 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
     const buildingSpecificData = allHistoryData
       .filter(item => {
         const deviceUuid = item.device_uuid;
-        const mappedDevice = DEVICE_UUID_BUILDING_MAP[deviceUuid];
+        const mappedDevice = deviceMap[deviceUuid];
         return mappedDevice && mappedDevice.appliesTo.includes(buildingName);
       })
       .map(item => {
@@ -358,7 +374,7 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
             humidity_ext: undefined,
         };
 
-        const deviceMapping = DEVICE_UUID_BUILDING_MAP[item.device_uuid];
+        const deviceMapping = deviceMap[item.device_uuid];
 
         if (item.record_type === 'sensor' && item.data) {
           if (deviceMapping.type === 'indoor') {
@@ -450,7 +466,7 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
 
       allHistoryData.forEach(item => {
         const deviceUuid = item.device_uuid;
-        const mappedDevice = DEVICE_UUID_BUILDING_MAP[deviceUuid];
+        const mappedDevice = deviceMap[deviceUuid];
 
         if (mappedDevice && mappedDevice.appliesTo.includes(buildingName) && item.record_type === 'sensor' && item.data) {
           const timestamp = new Date(item.timestamp).getTime();
@@ -527,7 +543,7 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
             values: row.data || {},
           };
 
-          const deviceMapping = DEVICE_UUID_BUILDING_MAP[liveData.device_uuid];
+          const deviceMapping = deviceMap[liveData.device_uuid];
           if (!deviceMapping) return;
 
           if (liveData.record_type === 'camera' && liveData.values?.image) {
@@ -614,7 +630,7 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [building, rangeHours, compareBuildings, useFakeData, language, customStart, customEnd]);
+  }, [building, rangeHours, compareBuildings, useFakeData, language, customStart, customEnd, deviceMap]);
 
   // Fetch initial main building data and refresh for historical/fake data for charts
   useEffect(() => {
@@ -634,13 +650,13 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
     const id = setInterval(updateMainChartData, 15 * 60 * 1000); // Refresh historical data every 15 mins
     console.log("Component updated. window.ApexCharts:", window.ApexCharts);
     return () => clearInterval(id);
-  }, [building, useFakeData, rangeHours, customStart, customEnd]); // rangeHours is already a dependency
+  }, [building, useFakeData, rangeHours, customStart, customEnd, deviceMap]);
 
   // Load data for both HabiTEK cabins whenever demo mode changes or initial load for comparison chart
   useEffect(() => {
     console.log('[useEffect - comparison chart data] Calling fetchAllStatsForCharts.');
     fetchAllStatsForCharts().then(setComparisonData);
-  }, [useFakeData, rangeHours, customStart, customEnd]); // rangeHours is already a dependency
+  }, [useFakeData, rangeHours, customStart, customEnd, deviceMap]);
 
   // Identify the hottest outdoor day across both HabiTEK cabins and compile per-building stats for that day
   useEffect(() => {
@@ -734,7 +750,7 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
     loadAllLatestStats();
     const intervalId = setInterval(loadAllLatestStats, 5 * 60 * 1000); // Refresh every 5 mins
     return () => clearInterval(intervalId);
-  }, [useFakeData, language]);
+  }, [useFakeData, language, deviceMap]);
 
   // Update camera snapshot every 15 minutes using a placeholder image (if not updated by WS)
   useEffect(() => {
