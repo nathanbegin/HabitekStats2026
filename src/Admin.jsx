@@ -58,6 +58,89 @@ function gatewayIsOnline(device, latestDeviceWebhook) {
   return Date.now() - lastActivity <= GATEWAY_ONLINE_WINDOW_MS;
 }
 
+function parseMeasurementNumber(value) {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+
+  const match = String(value).match(/-?\d+(?:\.\d+)?/);
+  if (!match) return null;
+
+  const parsed = Number(match[0]);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function batteryStatusFromRaw(value) {
+  if (value === undefined || value === null || value === "") return null;
+
+  const labels = {
+    0: "Inconnu",
+    1: "En charge",
+    2: "En décharge",
+    3: "Complètement chargée",
+    4: "Charge anormale",
+  };
+
+  const numeric = Number(value);
+  if (Number.isFinite(numeric) && Object.prototype.hasOwnProperty.call(labels, numeric)) {
+    return labels[numeric];
+  }
+
+  return String(value);
+}
+
+function solarStatusFromRaw(value) {
+  if (value === undefined || value === null || value === "") {
+    return { active: null, label: null };
+  }
+
+  const normalized = String(value).trim().toLowerCase();
+  const active =
+    value === true ||
+    Number(value) === 1 ||
+    normalized === "active" ||
+    normalized === "on";
+  const inactive =
+    value === false ||
+    Number(value) === 0 ||
+    normalized === "inactive" ||
+    normalized === "off";
+
+  return {
+    active: active ? true : inactive ? false : null,
+    label: active ? "Actif" : inactive ? "Inactif" : String(value),
+  };
+}
+
+function gatewayEnergyFromWebhook(values) {
+  const data = values && typeof values === "object" ? values : {};
+  const batteryInfo =
+    data.battery_info && typeof data.battery_info === "object"
+      ? data.battery_info
+      : {};
+
+  const batteryLevel = parseMeasurementNumber(
+    data.battery ?? data.battery_level ?? batteryInfo.battery_level
+  );
+  const batteryTemperature = parseMeasurementNumber(
+    batteryInfo.battery_tempeture ??
+      batteryInfo.battery_temperature ??
+      data.battery_tempeture ??
+      data.battery_temperature
+  );
+  const batteryStatusRaw =
+    batteryInfo.battery_status ?? data.battery_status ?? null;
+  const solarRaw = batteryInfo.solar_status ?? data.solar_status ?? null;
+  const solar = solarStatusFromRaw(solarRaw);
+
+  return {
+    batteryLevel,
+    batteryTemperature,
+    batteryStatus: batteryStatusFromRaw(batteryStatusRaw),
+    solarActive: solar.active,
+    solarLabel: solar.label,
+  };
+}
+
 function StatusBadge({ status }) {
   const meta = STATUS_META[status] || {
     label: status || "Inconnu",
@@ -659,7 +742,7 @@ export default function Admin() {
             <div>
               <h2 className="text-lg font-bold text-gray-900">Capteurs détectés</h2>
               <p className="text-sm text-gray-600">
-                Les DevEUI apparaissent automatiquement dès qu'un webhook valide est traité. Le gateway est identifié séparément. Son état combine Milesight Open API et les webhooks reçus. Les informations batterie et solaire sont récupérées directement depuis Milesight lorsqu’elles sont disponibles.
+                Les DevEUI apparaissent automatiquement dès qu'un webhook valide est traité. Le gateway est identifié séparément. Son état combine Milesight Open API et les webhooks reçus. Les informations batterie et solaire utilisent en priorité le webhook du SG50, puis l’Open API Milesight en secours.
               </p>
             </div>
           </div>
@@ -689,6 +772,34 @@ export default function Admin() {
                   isGateway && Number.isFinite(apiLastUpdate)
                     ? Math.max(localGatewayActivity || 0, apiLastUpdate)
                     : localGatewayActivity;
+                const webhookEnergy = isGateway
+                  ? gatewayEnergyFromWebhook(values)
+                  : null;
+                const gatewayBatteryLevel =
+                  webhookEnergy?.batteryLevel ??
+                  gatewayStatus?.battery?.level ??
+                  null;
+                const gatewayBatteryStatus =
+                  webhookEnergy?.batteryStatus ??
+                  gatewayStatus?.battery?.status ??
+                  null;
+                const gatewayBatteryTemperature =
+                  webhookEnergy?.batteryTemperature ??
+                  gatewayStatus?.battery?.temperature ??
+                  null;
+                const gatewayBatteryTemperatureReportedAt =
+                  webhookEnergy?.batteryTemperature !== null &&
+                  webhookEnergy?.batteryTemperature !== undefined
+                    ? device.last_seen_at
+                    : gatewayStatus?.battery?.temperatureReportedAt ?? null;
+                const gatewaySolarActive =
+                  webhookEnergy?.solarActive ??
+                  gatewayStatus?.solar?.active ??
+                  null;
+                const gatewaySolarLabel =
+                  webhookEnergy?.solarLabel ??
+                  gatewayStatus?.solar?.label ??
+                  null;
                 return (
                   <div key={device.device_uuid} className="bg-white rounded-2xl shadow p-4">
                     <div className="grid grid-cols-1 lg:grid-cols-[1.25fr_1fr_1fr_1fr] gap-4 items-center">
@@ -803,46 +914,46 @@ export default function Admin() {
                             <div className="flex items-center justify-between gap-2">
                               <span>🔋 Batterie</span>
                               <strong>
-                                {gatewayStatus?.battery?.level !== null &&
-                                gatewayStatus?.battery?.level !== undefined
-                                  ? `${gatewayStatus.battery.level}%`
+                                {gatewayBatteryLevel !== null &&
+                                gatewayBatteryLevel !== undefined
+                                  ? `${gatewayBatteryLevel}%`
                                   : "—"}
                               </strong>
                             </div>
                             <div className="flex items-center justify-between gap-2">
                               <span>État batterie</span>
-                              <span>{gatewayStatus?.battery?.status || "—"}</span>
+                              <span>{gatewayBatteryStatus || "—"}</span>
                             </div>
                             <div className="flex items-center justify-between gap-2">
                               <span>☀️ Solaire</span>
                               <span
                                 className={
-                                  gatewayStatus?.solar?.active === true
+                                  gatewaySolarActive === true
                                     ? "font-semibold text-green-700"
-                                    : gatewayStatus?.solar?.active === false
+                                    : gatewaySolarActive === false
                                     ? "font-semibold text-gray-600"
                                     : ""
                                 }
                               >
-                                {gatewayStatus?.solar?.label || "—"}
+                                {gatewaySolarLabel || "—"}
                               </span>
                             </div>
                             <div>
                               <div className="flex items-center justify-between gap-2">
                                 <span>🌡️ Batterie</span>
                                 <span>
-                                  {gatewayStatus?.battery?.temperature !== null &&
-                                  gatewayStatus?.battery?.temperature !== undefined
-                                    ? `${gatewayStatus.battery.temperature} °C`
+                                  {gatewayBatteryTemperature !== null &&
+                                  gatewayBatteryTemperature !== undefined
+                                    ? `${gatewayBatteryTemperature} °C`
                                     : "—"}
                                 </span>
                               </div>
-                              {gatewayStatus?.battery?.temperatureReportedAt && (
+                              {gatewayBatteryTemperatureReportedAt && (
                                 <div className="text-[11px] text-gray-500 text-right mt-0.5">
-                                  Rapportée : {formatDate(gatewayStatus.battery.temperatureReportedAt)}
+                                  Rapportée : {formatDate(gatewayBatteryTemperatureReportedAt)}
                                 </div>
                               )}
-                              {gatewayStatus?.battery?.temperature == null &&
+                              {gatewayBatteryTemperature == null &&
                                 gatewayStatus?.propertyScan?.missing?.includes("battery_temperature") && (
                                   <div className="text-[11px] text-amber-700 mt-1">
                                     Température non trouvée après{" "}
