@@ -34,3 +34,28 @@ begin
     alter publication supabase_realtime add table public.device_data;
   end if;
 end $$;
+
+
+create table if not exists public.milesight_devices (
+  device_uuid text primary key,
+  first_seen_at timestamptz not null default now(),
+  last_seen_at timestamptz not null default now(),
+  record_type text,
+  latest_data jsonb not null default '{}'::jsonb,
+  assignment text check (
+    assignment is null or assignment in (
+      'code_indoor',
+      'passivehouse_indoor',
+      'outdoor_shared'
+    )
+  ),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists milesight_devices_last_seen_idx
+  on public.milesight_devices (last_seen_at desc);
+
+alter table public.milesight_devices enable row level security;
+
+-- No public RLS policy is intentionally created for milesight_devices.
+-- Admin/API access uses the Supabase service-role key on the server.
