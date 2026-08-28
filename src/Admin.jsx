@@ -217,7 +217,7 @@ export default function Admin() {
     if (!authenticated) return undefined;
 
     loadGatewayStatus();
-    const id = setInterval(loadGatewayStatus, 60 * 1000);
+    const id = setInterval(loadGatewayStatus, 10 * 60 * 1000);
     return () => clearInterval(id);
   }, [authenticated]);
 
@@ -827,14 +827,29 @@ export default function Admin() {
                                 {gatewayStatus?.solar?.label || "—"}
                               </span>
                             </div>
-                            <div className="flex items-center justify-between gap-2">
-                              <span>🌡️ Batterie</span>
-                              <span>
-                                {gatewayStatus?.battery?.temperature !== null &&
-                                gatewayStatus?.battery?.temperature !== undefined
-                                  ? `${gatewayStatus.battery.temperature} °C`
-                                  : "—"}
-                              </span>
+                            <div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span>🌡️ Batterie</span>
+                                <span>
+                                  {gatewayStatus?.battery?.temperature !== null &&
+                                  gatewayStatus?.battery?.temperature !== undefined
+                                    ? `${gatewayStatus.battery.temperature} °C`
+                                    : "—"}
+                                </span>
+                              </div>
+                              {gatewayStatus?.battery?.temperatureReportedAt && (
+                                <div className="text-[11px] text-gray-500 text-right mt-0.5">
+                                  Rapportée : {formatDate(gatewayStatus.battery.temperatureReportedAt)}
+                                </div>
+                              )}
+                              {gatewayStatus?.battery?.temperature == null &&
+                                gatewayStatus?.propertyScan?.missing?.includes("battery_temperature") && (
+                                  <div className="text-[11px] text-amber-700 mt-1">
+                                    Température non trouvée après{" "}
+                                    {gatewayStatus.propertyScan.recordsScanned || 0} rapport(s) Milesight
+                                    sur {gatewayStatus.propertyScan.pagesScanned || 0} page(s).
+                                  </div>
+                                )}
                             </div>
                           </div>
                           {gatewayStatusError && (
