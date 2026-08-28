@@ -371,20 +371,14 @@ export default function Admin() {
         return;
       }
 
-      if (response.status === 409) {
-        setGatewayQueryMessage(
-          payload.error ||
-            "Le SG50 ne publie pas de commande permettant de demander un nouveau rapport."
-        );
-        return;
-      }
-
       if (!response.ok) {
         throw new Error(payload.error || "Impossible d'interroger le SG50.");
       }
 
       setGatewayQueryMessage(
-        `Commande envoyée (${payload.serviceId || "service TSL"}). Attente du nouveau rapport…`
+        payload.experimentalFallback
+          ? `Essai forcé envoyé via ${payload.serviceId || "query_device_status"}. Attente d’un nouveau rapport du SG50…`
+          : `Commande envoyée (${payload.serviceId || "service TSL"}). Attente du nouveau rapport…`
       );
 
       // The Milesight service invocation is asynchronous. Poll Supabase/logs
@@ -1058,13 +1052,13 @@ export default function Admin() {
                                   onClick={queryGatewayNow}
                                   disabled={
                                     gatewayQuerying ||
-                                    !gatewayStatus?.capabilities?.statusQuerySupported
+                                    gatewayStatus?.configured === false
                                   }
                                   className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-600 disabled:cursor-not-allowed"
                                   title={
                                     gatewayStatus?.capabilities?.statusQuerySupported
                                       ? `Forcer une nouvelle demande via ${gatewayStatus.capabilities.statusQueryService?.id || "le service TSL détecté"}`
-                                      : "Aucun service d'interrogation compatible détecté dans le TSL du SG50"
+                                      : "Essayer query_device_status même si le TSL du SG50 ne l’annonce pas"
                                   }
                                 >
                                   <span aria-hidden="true">📡</span>
@@ -1082,13 +1076,16 @@ export default function Admin() {
                                   </span>
                                 </span>
                               ) : gatewayStatus?.capabilities ? (
-                                <span className="text-gray-500">
-                                  Aucun service de demande d’état compatible détecté dans le TSL
-                                  ({gatewayStatus.capabilities.serviceCount || 0} service(s) publié(s)).
+                                <span className="text-amber-700">
+                                  TSL : aucun service d’état annoncé. Le bouton essaiera quand même{" "}
+                                  <span className="font-mono">query_device_status</span>{" "}
+                                  en mode expérimental.
                                 </span>
                               ) : (
                                 <span className="text-gray-400">
-                                  Détection des commandes SG50…
+                                  Détection des commandes SG50… Un essai{" "}
+                                  <span className="font-mono">query_device_status</span>{" "}
+                                  restera disponible.
                                 </span>
                               )}
                             </div>
