@@ -7,6 +7,14 @@ const ASSIGNMENTS = [
   { value: "outdoor_shared", label: "Extérieur — partagé" },
 ];
 
+const STATUS_META = {
+  processed: { label: "Traité", classes: "bg-green-100 text-green-800 border-green-200" },
+  received: { label: "Reçu", classes: "bg-blue-100 text-blue-800 border-blue-200" },
+  rejected: { label: "Rejeté", classes: "bg-red-100 text-red-800 border-red-200" },
+  ignored: { label: "Ignoré", classes: "bg-amber-100 text-amber-800 border-amber-200" },
+  error: { label: "Erreur", classes: "bg-red-100 text-red-800 border-red-200" },
+};
+
 function formatDate(value) {
   if (!value) return "—";
   const date = new Date(value);
@@ -15,17 +23,35 @@ function formatDate(value) {
     : date.toLocaleString("fr-CA", { dateStyle: "medium", timeStyle: "medium" });
 }
 
+function StatusBadge({ status }) {
+  const meta = STATUS_META[status] || {
+    label: status || "Inconnu",
+    classes: "bg-gray-100 text-gray-700 border-gray-200",
+  };
+
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${meta.classes}`}>
+      {meta.label}
+    </span>
+  );
+}
+
 export default function Admin() {
   const [password, setPassword] = useState("");
   const [devices, setDevices] = useState([]);
+  const [logs, setLogs] = useState([]);
   const [authenticated, setAuthenticated] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [logsLoading, setLogsLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [logsError, setLogsError] = useState("");
 
   const mappedCount = useMemo(
     () => devices.filter((device) => device.assignment).length,
     [devices]
   );
+
+  const latestWebhook = logs[0] || null;
 
   const loadDevices = async () => {
     setLoading(true);
@@ -52,9 +78,52 @@ export default function Admin() {
     }
   };
 
+  const loadLogs = async () => {
+    setLogsLoading(true);
+    setLogsError("");
+
+    try {
+      const response = await fetch("/api/admin/webhook-logs", {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+
+      if (response.status === 401) {
+        setAuthenticated(false);
+        setLogs([]);
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error("Impossible de charger les logs webhook");
+      }
+
+      setLogs(await response.json());
+    } catch (error) {
+      setLogsError(
+        `${error.message}. Vérifie que la dernière version de supabase/schema.sql a été exécutée.`
+      );
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
+  const refreshAll = () => {
+    loadDevices();
+    loadLogs();
+  };
+
   useEffect(() => {
     loadDevices();
   }, []);
+
+  useEffect(() => {
+    if (!authenticated) return undefined;
+
+    loadLogs();
+    const id = setInterval(loadLogs, 10 * 1000);
+    return () => clearInterval(id);
+  }, [authenticated]);
 
   const login = async (event) => {
     event.preventDefault();
@@ -91,6 +160,7 @@ export default function Admin() {
     });
     setAuthenticated(false);
     setDevices([]);
+    setLogs([]);
   };
 
   const assign = async (deviceUuid, assignment) => {
@@ -176,16 +246,16 @@ export default function Admin() {
         <div className="bg-white rounded-2xl shadow p-5 mb-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <div className="text-sm font-semibold text-blue-600">HabiTEK 2026</div>
-            <h1 className="text-2xl font-bold text-gray-900">Capteurs Milesight</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Administration Milesight</h1>
             <p className="text-sm text-gray-600 mt-1">
-              Les DevEUI apparaissent ici automatiquement dès qu'un webhook est reçu.
+              Réception des webhooks, DevEUI détectés et assignation des capteurs.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <a href="/" className="px-3 py-2 border rounded-xl text-sm hover:bg-gray-50">
               Voir le dashboard
             </a>
-            <button onClick={loadDevices} className="px-3 py-2 border rounded-xl text-sm hover:bg-gray-50">
+            <button onClick={refreshAll} className="px-3 py-2 border rounded-xl text-sm hover:bg-gray-50">
               Actualiser
             </button>
             <button onClick={logout} className="px-3 py-2 bg-gray-900 text-white rounded-xl text-sm">
@@ -194,7 +264,7 @@ export default function Admin() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 mb-5">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
           <div className="bg-white rounded-2xl shadow p-4">
             <div className="text-2xl font-bold">{devices.length}</div>
             <div className="text-sm text-gray-500">DevEUI détectés</div>
@@ -202,6 +272,14 @@ export default function Admin() {
           <div className="bg-white rounded-2xl shadow p-4">
             <div className="text-2xl font-bold">{mappedCount}</div>
             <div className="text-sm text-gray-500">Capteurs assignés</div>
+          </div>
+          <div className="bg-white rounded-2xl shadow p-4">
+            <div className="flex items-center gap-2 min-h-8">
+              {latestWebhook ? <StatusBadge status={latestWebhook.status} /> : <span className="text-gray-400">Aucun</span>}
+            </div>
+            <div className="text-sm text-gray-500 mt-1">
+              {latestWebhook ? `Dernier webhook : ${formatDate(latestWebhook.received_at)}` : "Aucun webhook journalisé"}
+            </div>
           </div>
         </div>
 
@@ -211,56 +289,138 @@ export default function Admin() {
           </div>
         )}
 
-        {devices.length === 0 ? (
-          <div className="bg-white rounded-2xl shadow p-8 text-center text-gray-600">
-            Aucun DevEUI reçu pour le moment. Envoie un webhook Milesight puis clique sur « Actualiser ».
+        <section className="bg-white rounded-2xl shadow p-4 sm:p-5 mb-5">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Réception webhook Milesight</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Journal des 50 dernières requêtes reçues par <span className="font-mono">/api/milesight-webhook</span>.
+              </p>
+            </div>
+            <div className="text-xs text-gray-500">
+              {logsLoading ? "Actualisation…" : "Actualisation automatique : 10 s"}
+            </div>
           </div>
-        ) : (
-          <div className="space-y-3">
-            {devices.map((device) => {
-              const values = device.latest_data || {};
-              return (
-                <div key={device.device_uuid} className="bg-white rounded-2xl shadow p-4">
-                  <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr_1fr] gap-4 items-center">
-                    <div>
-                      <div className="text-xs uppercase tracking-wide text-gray-400">DevEUI</div>
-                      <div className="font-mono font-semibold text-gray-900 break-all">
-                        {device.device_uuid}
+
+          {logsError && (
+            <div className="bg-red-50 border border-red-100 text-red-700 rounded-xl px-4 py-3 mb-4 text-sm">
+              {logsError}
+            </div>
+          )}
+
+          {logs.length === 0 && !logsLoading ? (
+            <div className="border border-dashed rounded-xl p-6 text-center text-sm text-gray-500">
+              Aucun webhook journalisé pour le moment. Utilise le bouton Test dans Milesight ou attends la prochaine mesure.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {logs.map((log) => {
+                const uuids = Array.isArray(log.device_uuids) ? log.device_uuids : [];
+                const types = Array.isArray(log.record_types) ? log.record_types : [];
+
+                return (
+                  <div key={log.id} className="border rounded-xl p-3">
+                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <StatusBadge status={log.status} />
+                        <span className="text-xs font-mono text-gray-500">HTTP {log.http_status ?? "—"}</span>
+                        <span className="text-xs text-gray-500">{formatDate(log.received_at)}</span>
                       </div>
-                      <div className="text-xs text-gray-500 mt-2">
-                        Dernier webhook : {formatDate(device.last_seen_at)}
+                      <div className="text-xs text-gray-500">
+                        {log.event_count || 0} reçu(s) · {log.inserted_count || 0} enregistré(s)
                       </div>
                     </div>
 
-                    <div className="text-sm text-gray-700">
-                      <div><strong>Type :</strong> {device.record_type || "—"}</div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-3 text-sm">
                       <div>
-                        <strong>Dernière mesure :</strong>{" "}
-                        {values.temperature !== undefined ? `${values.temperature} °C` : "—"}
-                        {values.humidity !== undefined ? ` · ${values.humidity} %` : ""}
+                        <span className="font-medium text-gray-700">DevEUI :</span>{" "}
+                        {uuids.length ? (
+                          uuids.map((uuid) => (
+                            <span key={uuid} className="font-mono text-xs break-all mr-2">{uuid}</span>
+                          ))
+                        ) : (
+                          <span className="text-gray-400">aucun détecté</span>
+                        )}
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700">Type :</span>{" "}
+                        <span className="text-gray-600">{types.length ? types.join(", ") : "—"}</span>
                       </div>
                     </div>
 
-                    <label className="text-sm">
-                      <span className="block font-medium text-gray-700 mb-1">Assignation</span>
-                      <select
-                        value={device.assignment || "unassigned"}
-                        onChange={(event) => assign(device.device_uuid, event.target.value)}
-                        className="w-full border rounded-xl px-3 py-2 bg-white"
-                      >
-                        {ASSIGNMENTS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                    {log.message && (
+                      <div className="text-xs text-gray-600 mt-2 bg-gray-50 rounded-lg px-3 py-2">
+                        {log.message}
+                      </div>
+                    )}
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        <section>
+          <div className="flex items-end justify-between gap-3 mb-3">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Capteurs détectés</h2>
+              <p className="text-sm text-gray-600">
+                Les DevEUI apparaissent automatiquement dès qu'un webhook valide est traité.
+              </p>
+            </div>
           </div>
-        )}
+
+          {devices.length === 0 ? (
+            <div className="bg-white rounded-2xl shadow p-8 text-center text-gray-600">
+              Aucun DevEUI reçu pour le moment.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {devices.map((device) => {
+                const values = device.latest_data || {};
+                return (
+                  <div key={device.device_uuid} className="bg-white rounded-2xl shadow p-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr_1fr] gap-4 items-center">
+                      <div>
+                        <div className="text-xs uppercase tracking-wide text-gray-400">DevEUI</div>
+                        <div className="font-mono font-semibold text-gray-900 break-all">
+                          {device.device_uuid}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-2">
+                          Dernier webhook : {formatDate(device.last_seen_at)}
+                        </div>
+                      </div>
+
+                      <div className="text-sm text-gray-700">
+                        <div><strong>Type :</strong> {device.record_type || "—"}</div>
+                        <div>
+                          <strong>Dernière mesure :</strong>{" "}
+                          {values.temperature !== undefined ? `${values.temperature} °C` : "—"}
+                          {values.humidity !== undefined ? ` · ${values.humidity} %` : ""}
+                        </div>
+                      </div>
+
+                      <label className="text-sm">
+                        <span className="block font-medium text-gray-700 mb-1">Assignation</span>
+                        <select
+                          value={device.assignment || "unassigned"}
+                          onChange={(event) => assign(device.device_uuid, event.target.value)}
+                          className="w-full border rounded-xl px-3 py-2 bg-white"
+                        >
+                          {ASSIGNMENTS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );
