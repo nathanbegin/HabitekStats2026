@@ -29,6 +29,27 @@ function classify(values) {
   return "unknown";
 }
 
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function deepMerge(left, right) {
+  if (!isPlainObject(left)) return isPlainObject(right) ? { ...right } : right;
+  if (!isPlainObject(right)) return { ...left };
+
+  const merged = { ...left };
+
+  for (const [key, value] of Object.entries(right)) {
+    if (isPlainObject(value) && isPlainObject(merged[key])) {
+      merged[key] = deepMerge(merged[key], value);
+    } else {
+      merged[key] = value;
+    }
+  }
+
+  return merged;
+}
+
 function normalizeEvent(evt) {
   const data = evt?.data || {};
   const profile = data.deviceProfile || {};
@@ -165,7 +186,12 @@ export default async function handler(req, res) {
     const devicesByUuid = new Map();
     rows.forEach((row) => {
       const current = devicesByUuid.get(row.device_uuid);
-      if (!current || new Date(row.timestamp) > new Date(current.last_seen_at)) {
+      const rowTime = new Date(row.timestamp).getTime();
+      const currentTime = current
+        ? new Date(current.last_seen_at).getTime()
+        : Number.NEGATIVE_INFINITY;
+
+      if (!current || rowTime > currentTime) {
         devicesByUuid.set(row.device_uuid, {
           device_uuid: row.device_uuid,
           last_seen_at: row.timestamp,
@@ -173,6 +199,18 @@ export default async function handler(req, res) {
           latest_data: row.data || {},
           updated_at: new Date().toISOString(),
         });
+        return;
+      }
+
+      // The SG50 can send multiple PROPERTY events for the same timestamp:
+      // one with general gateway data and another with battery_info/device_info.
+      // Merge them so the registry keeps the complete snapshot.
+      if (rowTime === currentTime) {
+        current.latest_data = deepMerge(current.latest_data || {}, row.data || {});
+        if (current.record_type === "unknown" && row.record_type !== "unknown") {
+          current.record_type = row.record_type;
+        }
+        current.updated_at = new Date().toISOString();
       }
     });
 
