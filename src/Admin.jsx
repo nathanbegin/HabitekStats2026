@@ -49,6 +49,7 @@ export default function Admin() {
   const [resetPassword, setResetPassword] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
   const [resetError, setResetError] = useState("");
+  const [activeSection, setActiveSection] = useState("devices");
 
   const mappedCount = useMemo(
     () => devices.filter((device) => device.assignment).length,
@@ -386,7 +387,75 @@ export default function Admin() {
           </div>
         )}
 
-        <section className="bg-white rounded-2xl shadow p-4 sm:p-5 mb-5">
+        <nav
+          className="bg-white rounded-2xl shadow p-2 mb-5 sticky top-3 z-20"
+          aria-label="Sections d'administration"
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveSection("devices")}
+              className={`flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-left transition ${
+                activeSection === "devices"
+                  ? "bg-blue-600 text-white shadow-sm"
+                  : "bg-gray-50 text-gray-700 hover:bg-gray-100"
+              }`}
+            >
+              <span>
+                <span className="block text-sm font-bold">Capteurs détectés</span>
+                <span className={`block text-xs mt-0.5 ${activeSection === "devices" ? "text-blue-100" : "text-gray-500"}`}>
+                  Surnoms et assignations
+                </span>
+              </span>
+              <span className={`min-w-8 h-8 px-2 rounded-full flex items-center justify-center text-sm font-bold ${
+                activeSection === "devices" ? "bg-white/20 text-white" : "bg-white text-gray-700"
+              }`}>
+                {devices.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveSection("webhooks")}
+              className={`flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-left transition ${
+                activeSection === "webhooks"
+                  ? "bg-blue-600 text-white shadow-sm"
+                  : "bg-gray-50 text-gray-700 hover:bg-gray-100"
+              }`}
+            >
+              <span>
+                <span className="block text-sm font-bold">Réception webhook</span>
+                <span className={`block text-xs mt-0.5 ${activeSection === "webhooks" ? "text-blue-100" : "text-gray-500"}`}>
+                  Connexions Milesight
+                </span>
+              </span>
+              <span className="shrink-0">
+                {latestWebhook ? <StatusBadge status={latestWebhook.status} /> : <span className="text-xs">Aucun</span>}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveSection("maintenance")}
+              className={`flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-left transition ${
+                activeSection === "maintenance"
+                  ? "bg-red-600 text-white shadow-sm"
+                  : "bg-gray-50 text-gray-700 hover:bg-gray-100"
+              }`}
+            >
+              <span>
+                <span className="block text-sm font-bold">Maintenance</span>
+                <span className={`block text-xs mt-0.5 ${activeSection === "maintenance" ? "text-red-100" : "text-gray-500"}`}>
+                  Remise à zéro
+                </span>
+              </span>
+              <span className="text-lg" aria-hidden="true">⚙</span>
+            </button>
+          </div>
+        </nav>
+
+        {activeSection === "webhooks" && (
+          <section className="bg-white rounded-2xl shadow p-4 sm:p-5 mb-5">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
             <div>
               <h2 className="text-lg font-bold text-gray-900">Réception webhook Milesight</h2>
@@ -464,8 +533,10 @@ export default function Admin() {
             </div>
           )}
         </section>
+        )}
 
-        <section className="bg-white rounded-2xl shadow p-4 sm:p-5 mb-5 border border-red-100">
+        {activeSection === "maintenance" && (
+          <section className="bg-white rounded-2xl shadow p-4 sm:p-5 mb-5 border border-red-100">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <div className="text-xs font-bold uppercase tracking-wide text-red-600 mb-1">
@@ -487,8 +558,10 @@ export default function Admin() {
             </button>
           </div>
         </section>
+        )}
 
-        <section>
+        {activeSection === "devices" && (
+          <section>
           <div className="flex items-end justify-between gap-3 mb-3">
             <div>
               <h2 className="text-lg font-bold text-gray-900">Capteurs détectés</h2>
@@ -580,6 +653,7 @@ export default function Admin() {
             </div>
           )}
         </section>
+        )}
 
         {resetOpen && (
           <div
