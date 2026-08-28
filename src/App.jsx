@@ -10,8 +10,8 @@ const LanguageContext = createContext();
 
 const translations = {
   fr: {
-    event: "ICE‑BOX Challenge Montréal 2025",
-    appTitle: "Statistiques des bâtiments",
+    event: "ICE‑BOX Challenge Montréal 2026",
+    appTitle: "Statistiques des cabanes HabiTEK",
     currentConditions: "Conditions Actuelles",
     loadingStats: "Chargement des dernières statistiques...",
     tempInt: "Temp. Int.",
@@ -21,9 +21,9 @@ const translations = {
     lastUpdate: "Dernière MAJ",
     cameraSnapshot: "Dernière capture caméra",
     noImageAvailable: "Aucune image disponible",
-    selectBuilding: "Sélectionne un bâtiment pour afficher les statistiques de température et d’humidité.",
-    dataNotAvailable: "Données historiques non disponibles pour ce bâtiment (ND)",
-    buildingStats: "Statistiques du bâtiment :",
+    selectBuilding: "Sélectionne une cabane HabiTEK pour afficher ses statistiques de température et d’humidité.",
+    dataNotAvailable: "Données historiques non disponibles pour cette cabane (ND)",
+    buildingStats: "Statistiques de la cabane :",
     range: "Plage",
     hours: "h",
     day: "jour",
@@ -37,8 +37,8 @@ const translations = {
     measuredValue: "Valeur mesurée",
     time: "Temps (horodatage)",
     comparison: "Comparaison",
-    building1: "Bâtiment 1",
-    building2: "Bâtiment 2",
+    building1: "Cabane 1",
+    building2: "Cabane 2",
     disableDemoMode: "🔁 Désactiver mode démo",
     activateDemoMode: "🧪 Activer mode démo",
     customRange: "Plage personnalisée",
@@ -52,7 +52,7 @@ const translations = {
     hottestDayTitle: "Journée la plus chaude (température ext.)",
     topHotDays: "5 journées les plus chaudes",
     topColdDays: "5 journées les plus froides",
-    statsForBuilding: "Statistiques pour",
+    statsForBuilding: "Statistiques pour la cabane",
     max: "Max",
     min: "Min",
     avg: "Moyenne",
@@ -60,8 +60,8 @@ const translations = {
     footerText: "Site pour l'Ice Box Challenge Montréal 2026. Les valeurs des capteurs sont obtenues grâce au partenariat avec Telus.",
   },
   en: {
-    event: "ICE‑BOX Challenge Montréal 2025",
-    appTitle: "Building Statistics",
+    event: "ICE‑BOX Challenge Montréal 2026",
+    appTitle: "HabiTEK Cabin Statistics",
     currentConditions: "Current Conditions",
     loadingStats: "Loading latest statistics...",
     tempInt: "Indoor Temp.",
@@ -71,9 +71,9 @@ const translations = {
     lastUpdate: "Last Update",
     cameraSnapshot: "Latest Camera Snapshot",
     noImageAvailable: "No image available",
-    selectBuilding: "Select a building to view temperature and humidity statistics.",
-    dataNotAvailable: "Historical data not available for this building (NA)",
-    buildingStats: "Building Statistics:",
+    selectBuilding: "Select a HabiTEK cabin to view its temperature and humidity statistics.",
+    dataNotAvailable: "Historical data not available for this cabin (NA)",
+    buildingStats: "Cabin Statistics:",
     range: "Range",
     hours: "h",
     day: "day",
@@ -87,8 +87,8 @@ const translations = {
     measuredValue: "Measured Value",
     time: "Time (Timestamp)",
     comparison: "Comparison",
-    building1: "Building 1",
-    building2: "Building 2",
+    building1: "Cabin 1",
+    building2: "Cabin 2",
     disableDemoMode: "🔁 Disable Demo Mode",
     activateDemoMode: "🧪 Activate Demo Mode",
     customRange: "Custom range",
@@ -102,12 +102,12 @@ const translations = {
     hottestDayTitle: "Hottest day (outdoor temp)",
     topHotDays: "Top 5 hottest days",
     topColdDays: "Top 5 coldest days",
-    statsForBuilding: "Stats for",
+    statsForBuilding: "Stats for cabin",
     max: "Max",
     min: "Min",
     avg: "Average",
     noDataHottest: "No outdoor data to determine the hottest day.",
-    footerText: "Website for the Ice Box Challenge Montreal 2025. Sensor values are obtained through partnership with Telus.",
+    footerText: "Website for the Ice Box Challenge Montreal 2026. Sensor values are obtained through partnership with Telus.",
   },
 };
 
@@ -145,16 +145,22 @@ const AVAILABLE_KEYS = [
   { key: "humidity_ext", label: "Humidité extérieure (%)", labelEn: "Outdoor Humidity (%)", color: "#ef4444" }  // Red
 ];
 
-// Mapping of device UUIDs to building names and sensor type
+// HabiTEK 2026 has two cabins: Code and PassiveHouse.
+// Legacy UUIDs are retained as migration defaults until the 2026 DevEUI values are confirmed.
+// Update these three values when the 2026 sensors are assigned.
+const CODE_INDOOR_DEVICE_UUID =
+  import.meta.env.VITE_CODE_INDOOR_DEVICE_UUID || '24E124785F162247';
+const PASSIVEHOUSE_INDOOR_DEVICE_UUID =
+  import.meta.env.VITE_PASSIVEHOUSE_INDOOR_DEVICE_UUID || '24E124785F160861';
+const OUTDOOR_DEVICE_UUID =
+  import.meta.env.VITE_OUTDOOR_DEVICE_UUID || '24E124785F162605';
+
+const CABINS = ['Code', 'PassiveHouse'];
+
 const DEVICE_UUID_BUILDING_MAP = {
-  // 'DEMO_1944595630658514945': { appliesTo: ['Habitek'], type: 'indoor' }, // Habitek indoor
-  '24E124785F160861': { appliesTo: ['Habitek'], type: 'indoor' }, // Habitek indoor
-  // 'DEMO_1943849316874285057': { appliesTo: ['Concordia'], type: 'indoor' }, // Concordia indoor
-  '24E124785F169079': { appliesTo: ['Concordia'], type: 'indoor' }, // Concordia indoor
-  // 'DEMO_1944598269878169601': { appliesTo: ['Habitek', 'Code', 'Concordia'], type: 'outdoor' }, // Outdoor for all
-  '24E124785F162605': { appliesTo: ['Habitek', 'Code', 'Concordia'], type: 'outdoor' }, // Outdoor for all
-  // 'DEMO_1944598331572187137': { appliesTo: ['Code'], type: 'indoor' }, // Code indoor
-  '24E124785F162247': { appliesTo: ['Code'], type: 'indoor' }, // Code indoor
+  [CODE_INDOOR_DEVICE_UUID]: { appliesTo: ['Code'], type: 'indoor' },
+  [PASSIVEHOUSE_INDOOR_DEVICE_UUID]: { appliesTo: ['PassiveHouse'], type: 'indoor' },
+  [OUTDOOR_DEVICE_UUID]: { appliesTo: CABINS, type: 'outdoor' },
 };
 
 // WebSocket server URL
@@ -176,12 +182,12 @@ function AppContent() {
   const defaultStart = toDateTimeLocal(startForDefaultRange);
   const defaultEnd = toDateTimeLocal(nowForDefaultRange);
 
-  const [building, setBuilding] = useState("Habitek"); // Currently selected building for the main chart
+  const [building, setBuilding] = useState("Code"); // Currently selected building for the main chart
   const [data, setData] = useState([]); // Stores data for the currently selected building for charts
-  const [comparisonData, setComparisonData] = useState([]); // Stores data for all buildings for comparison chart
+  const [comparisonData, setComparisonData] = useState([]); // Stores data for both HabiTEK cabins for comparison chart
   const [latestStats, setLatestStats] = useState({}); // Stores the very latest stats for each building (for current conditions panel)
   const [snapshotUrl, setSnapshotUrl] = useState(''); // URL for camera snapshot
-  const [compareBuildings, setCompareBuildings] = useState(['Habitek', 'Concordia']); // Buildings selected for comparison
+  const [compareBuildings, setCompareBuildings] = useState(['Code', 'PassiveHouse']); // Buildings selected for comparison
   const [compareSeries, setCompareSeries] = useState([]); // Formatted series for comparison chart
   const [error, setError] = useState(false); // Error state for API calls
   const [useFakeData, setUseFakeData] = useState(false); // Toggle for fake data mode
@@ -403,10 +409,10 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
 
 
 
-  // Helper fetching data for all buildings, used for the comparison chart
+  // Helper fetching data for both HabiTEK cabins, used for the comparison chart
   const fetchAllStatsForCharts = async () => {
-    console.log('[fetchAllStatsForCharts] Fetching data for all buildings for comparison.');
-    const buildingsList = ["Habitek", "Code", "Concordia"];
+    console.log('[fetchAllStatsForCharts] Fetching data for both HabiTEK cabins for comparison.');
+    const buildingsList = CABINS;
     const timeWindow = getTimeWindow();
     const allDataPromises = buildingsList.map(async (b) => {
       const stats = await fetchStats(b, timeWindow); // This will return live/historical data or empty array if API is not implemented
@@ -630,13 +636,13 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
     return () => clearInterval(id);
   }, [building, useFakeData, rangeHours, customStart, customEnd]); // rangeHours is already a dependency
 
-  // Load data for all buildings whenever demo mode changes or initial load for comparison chart
+  // Load data for both HabiTEK cabins whenever demo mode changes or initial load for comparison chart
   useEffect(() => {
     console.log('[useEffect - comparison chart data] Calling fetchAllStatsForCharts.');
     fetchAllStatsForCharts().then(setComparisonData);
   }, [useFakeData, rangeHours, customStart, customEnd]); // rangeHours is already a dependency
 
-  // Identify the hottest outdoor day across all buildings and compile per-building stats for that day
+  // Identify the hottest outdoor day across both HabiTEK cabins and compile per-building stats for that day
   useEffect(() => {
     if (!comparisonData.length) {
       setHottestDayStats(null);
@@ -670,7 +676,7 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
 
     setHottestDayStats({ dayKey: hottestDayKey, perBuilding });
 
-    // Build a ranking of hottest/coldest days based on outdoor temperature averages across all buildings
+    // Build a ranking of hottest/coldest days based on outdoor temperature averages across both HabiTEK cabins
     const dayAverages = new Map();
     comparisonData.forEach(({ data }) => {
       data.forEach((d) => {
@@ -710,11 +716,11 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
     setExtremeDays({ hottest: topHottest, coldest: topColdest });
   }, [comparisonData]);
 
-  // Load latest stats for all buildings for the "Conditions Actuelles" panel
+  // Load latest stats for both HabiTEK cabins for the "Conditions Actuelles" panel
   useEffect(() => {
     const loadAllLatestStats = async () => {
       setLoadingLatestStats(true);
-      const buildingsList = ["Habitek", "Code", "Concordia"];
+      const buildingsList = CABINS;
       const statsPromises = buildingsList.map(b => fetchLatestStatsForPanel(b));
       const results = await Promise.all(statsPromises);
       const newLatestStats = {};
@@ -856,7 +862,7 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
     }
   };
 
-  const allBuildings = ["Habitek", "Code", "Concordia"];
+  const allBuildings = CABINS;
 
   // Selecting a preset clears any draft/custom inputs so the preset window is authoritative.
   const handlePresetChange = (value) => {
@@ -1027,7 +1033,7 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
     URL.revokeObjectURL(url);
   };
 
-  // Create a printable page with every building-pair comparison so users can "Save as PDF"
+  // Create a printable page with every cabin-pair comparison so users can "Save as PDF"
   const handleExportAllComparisonsPdf = async () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -1203,13 +1209,13 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
         </LanguageContext.Consumer>
       </div>
 
-      {/* Latest Conditions for All Buildings */}
+      {/* Latest Conditions for Both HabiTEK Cabins */}
       <div className="bg-white p-4 rounded-2xl shadow mb-6">
         <h2 className="text-xl font-semibold mb-4 text-center text-gray-800">{t('currentConditions')}</h2>
         {loadingLatestStats ? (
           <p className="text-center text-gray-600">{t('loadingStats')}</p>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {allBuildings.map((b) => {
               const stats = latestStats[b] || {};
               return (
@@ -1465,7 +1471,7 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
         </div>
       </div>
 
-      {/* Comparison chart for two buildings */}
+      {/* Comparison chart for two cabins */}
       <div className="bg-white rounded-2xl px-4 pt-4 pb-12 shadow mb-10">
         <h2 className="text-lg font-semibold mb-4 text-center">{t('comparison')}</h2>
         <div className="mb-4 border-b pb-2">
