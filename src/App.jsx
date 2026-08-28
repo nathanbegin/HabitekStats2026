@@ -55,8 +55,16 @@ const translations = {
     min: "Min",
     avg: "Moyenne",
     noDataHottest: "Aucune donnée extérieure pour déterminer la journée la plus chaude.",
-    footerText: "Site pour l'Ice Box Challenge Montréal 2026. Les valeurs des capteurs sont obtenues grâce au partenariat avec Telus.",
-    presentedBy: "Les statistiques vous sont présentées par",
+    footerText: "Site de suivi HabiTEK pour ",
+    presentedBy: "Les statistiques vous sont présentées en partenariat avec TELUS et Controls Depot.",
+    demoPasswordTitle: "Activer le mode démo",
+    demoPasswordText: "Saisis le mot de passe administrateur pour activer les données de démonstration.",
+    demoPasswordLabel: "Mot de passe administrateur",
+    demoCancel: "Annuler",
+    demoConfirm: "Activer le mode démo",
+    demoChecking: "Vérification…",
+    demoInvalidPassword: "Mot de passe invalide.",
+    demoServerError: "Impossible de vérifier le mot de passe.",
   },
   en: {
     event: "ICE‑BOX Challenge Montréal 2026",
@@ -104,8 +112,16 @@ const translations = {
     min: "Min",
     avg: "Average",
     noDataHottest: "No outdoor data to determine the hottest day.",
-    footerText: "Website for the Ice Box Challenge Montreal 2026. Sensor values are obtained through partnership with Telus.",
-    presentedBy: "Statistics presented by",
+    footerText: "HabiTEK monitoring site for ",
+    presentedBy: "Statistics presented in partnership with TELUS and Controls Depot.",
+    demoPasswordTitle: "Activate demo mode",
+    demoPasswordText: "Enter the administrator password to enable demonstration data.",
+    demoPasswordLabel: "Administrator password",
+    demoCancel: "Cancel",
+    demoConfirm: "Activate demo mode",
+    demoChecking: "Checking…",
+    demoInvalidPassword: "Invalid password.",
+    demoServerError: "Unable to verify the password.",
   },
 };
 
@@ -148,6 +164,7 @@ const AVAILABLE_KEYS = [
 const CABINS = ['Code', 'PassiveHouse'];
 
 const CONTROLS_DEPOT_LOGO = "data:image/webp;base64,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";
+const TELUS_LOGO = "https://images.ctfassets.net/58hwalxwfjo5/1MV1LpbleB9VZSfXjN6ehG/9f17735bf7ae7a79f466a5510fa539c2/Brand_image.png"
 
 // Supabase Realtime client
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -177,6 +194,10 @@ function AppContent() {
   const [compareSeries, setCompareSeries] = useState([]); // Formatted series for comparison chart
   const [error, setError] = useState(false); // Error state for API calls
   const [useFakeData, setUseFakeData] = useState(false); // Toggle for fake data mode
+  const [demoAuthOpen, setDemoAuthOpen] = useState(false);
+  const [demoPassword, setDemoPassword] = useState("");
+  const [demoAuthLoading, setDemoAuthLoading] = useState(false);
+  const [demoAuthError, setDemoAuthError] = useState("");
   const [visibleKeys, setVisibleKeys] = useState(AVAILABLE_KEYS.map((k) => k.key)); // Keys visible in the main chart
   const [visibleCompareKeys, setVisibleCompareKeys] = useState(AVAILABLE_KEYS.map((k) => k.key)); // Keys visible in the comparison chart
   const [rangeHours, setRangeHours] = useState(24); // Default number of hours displayed in charts
@@ -1175,6 +1196,51 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
     );
   };
 
+  const openDemoAuth = () => {
+    setDemoPassword("");
+    setDemoAuthError("");
+    setDemoAuthOpen(true);
+  };
+
+  const closeDemoAuth = () => {
+    if (demoAuthLoading) return;
+    setDemoAuthOpen(false);
+    setDemoPassword("");
+    setDemoAuthError("");
+  };
+
+  const authorizeDemoMode = async (event) => {
+    event.preventDefault();
+    setDemoAuthLoading(true);
+    setDemoAuthError("");
+
+    try {
+      const response = await fetch("/api/demo/authorize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: demoPassword }),
+      });
+
+      if (response.status === 401) {
+        setDemoAuthError(t("demoInvalidPassword"));
+        return;
+      }
+
+      if (!response.ok) {
+        setDemoAuthError(t("demoServerError"));
+        return;
+      }
+
+      setUseFakeData(true);
+      setDemoAuthOpen(false);
+      setDemoPassword("");
+    } catch {
+      setDemoAuthError(t("demoServerError"));
+    } finally {
+      setDemoAuthLoading(false);
+    }
+  };
+
   return (
     <div className="p-4 max-w-6xl mx-auto">
       <header className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-5 mb-6">
@@ -1699,29 +1765,53 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
         </div>
       </div>
 
-      {/* Presenting partner */}
+      {/* Presenting partners */}
       <section className="bg-white rounded-2xl shadow border border-gray-100 px-6 py-7 mt-10 text-center">
-        <p className="text-sm sm:text-base font-medium text-gray-600 mb-4">{t('presentedBy')}</p>
-        <a
-          href="https://controlsdepot.com/"
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center justify-center"
-          aria-label="Controls Depot"
-        >
-          <img
-            src={CONTROLS_DEPOT_LOGO}
-            alt="Controls Depot"
-            className="w-48 sm:w-56 max-h-36 object-contain"
-          />
-        </a>
+        <p className="text-sm sm:text-base font-medium text-gray-600 mb-5">
+          {t('presentedBy')}
+        </p>
+        <div className="flex flex-wrap items-center justify-center gap-8 sm:gap-12">
+          <a
+            href="https://controlsdepot.com/"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center justify-center"
+            aria-label="Controls Depot"
+          >
+            <img
+              src={CONTROLS_DEPOT_LOGO}
+              alt="Controls Depot"
+              className="w-44 sm:w-52 max-h-24 object-contain"
+            />
+          </a>
+
+          <a
+            href="https://www.telus.com/"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center justify-center"
+            aria-label="TELUS"
+          >
+            <img
+              src={TELUS_LOGO}
+              alt="TELUS"
+              className="w-44 sm:w-52 max-h-24 object-contain"
+            />
+          </a>
+        </div>
       </section>
 
       {/* Footer information */}
       <footer className="text-center text-sm text-gray-600 mt-8">
         <div className="mt-8 text-center mb-4">
           <button
-            onClick={() => setUseFakeData((v) => !v)}
+            onClick={() => {
+              if (useFakeData) {
+                setUseFakeData(false);
+              } else {
+                openDemoAuth();
+              }
+            }}
             className="px-4 py-2 border rounded-xl text-sm text-white bg-gray-800 hover:bg-gray-700"
           >
             {useFakeData ? t('disableDemoMode') : t('activateDemoMode')}
@@ -1730,14 +1820,69 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
         {t('footerText')}
         <a href="https://iceboxmontreal.com/" className="underline">Ice Box Challenge Montréal 2026</a>
         .
-        <div className="flex justify-center mt-2">
-          <img
-            src="https://images.ctfassets.net/58hwalxwfjo5/1MV1LpbleB9VZSfXjN6ehG/9f17735bf7ae7a79f466a5510fa539c2/Brand_image.png"
-            alt="Telus logo"
-            className="transform scale-100 md:scale-[1.0]"
-          />
-        </div>
       </footer>
+
+      {demoAuthOpen && (
+        <div
+          className="fixed inset-0 z-[10000] bg-black/50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="demo-auth-title"
+        >
+          <form
+            onSubmit={authorizeDemoMode}
+            className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 text-left"
+          >
+            <h2 id="demo-auth-title" className="text-xl font-bold text-gray-900">
+              {t('demoPasswordTitle')}
+            </h2>
+            <p className="text-sm text-gray-600 mt-2">
+              {t('demoPasswordText')}
+            </p>
+
+            <label
+              className="block text-sm font-medium text-gray-700 mt-5 mb-2"
+              htmlFor="demo-admin-password"
+            >
+              {t('demoPasswordLabel')}
+            </label>
+            <input
+              id="demo-admin-password"
+              type="password"
+              autoComplete="current-password"
+              value={demoPassword}
+              onChange={(event) => setDemoPassword(event.target.value)}
+              className="w-full border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              autoFocus
+              required
+            />
+
+            {demoAuthError && (
+              <div className="mt-3 rounded-xl bg-red-50 border border-red-100 text-red-700 px-3 py-2 text-sm">
+                {demoAuthError}
+              </div>
+            )}
+
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-6">
+              <button
+                type="button"
+                onClick={closeDemoAuth}
+                disabled={demoAuthLoading}
+                className="px-4 py-2 border rounded-xl text-sm font-semibold hover:bg-gray-50 disabled:opacity-50"
+              >
+                {t('demoCancel')}
+              </button>
+              <button
+                type="submit"
+                disabled={demoAuthLoading || !demoPassword}
+                className="px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 disabled:opacity-50"
+              >
+                {demoAuthLoading ? t('demoChecking') : t('demoConfirm')}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
