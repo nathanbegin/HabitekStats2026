@@ -20,7 +20,7 @@ export default async function handler(req, res) {
   if (req.method === "GET") {
     const { data, error } = await supabase
       .from("milesight_devices")
-      .select("device_uuid,first_seen_at,last_seen_at,record_type,latest_data,assignment,updated_at")
+      .select("device_uuid,nickname,first_seen_at,last_seen_at,record_type,latest_data,assignment,updated_at")
       .order("last_seen_at", { ascending: false });
 
     if (error) {
@@ -35,22 +35,36 @@ export default async function handler(req, res) {
     try {
       const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
       const deviceUuid = String(body?.device_uuid || "").trim();
-      const assignment = String(body?.assignment || "unassigned");
+      const hasAssignment = Object.prototype.hasOwnProperty.call(body || {}, "assignment");
+      const hasNickname = Object.prototype.hasOwnProperty.call(body || {}, "nickname");
 
-      if (!deviceUuid || !VALID_ASSIGNMENTS.has(assignment)) {
-        return res.status(400).json({ error: "Assignation invalide" });
+      if (!deviceUuid || (!hasAssignment && !hasNickname)) {
+        return res.status(400).json({ error: "Modification invalide" });
       }
 
-      const dbAssignment = assignment === "unassigned" ? null : assignment;
+      const updates = { updated_at: new Date().toISOString() };
+
+      if (hasAssignment) {
+        const assignment = String(body?.assignment || "unassigned");
+        if (!VALID_ASSIGNMENTS.has(assignment)) {
+          return res.status(400).json({ error: "Assignation invalide" });
+        }
+        updates.assignment = assignment === "unassigned" ? null : assignment;
+      }
+
+      if (hasNickname) {
+        const nickname = String(body?.nickname || "").trim();
+        if (nickname.length > 80) {
+          return res.status(400).json({ error: "Le surnom doit contenir au maximum 80 caractères" });
+        }
+        updates.nickname = nickname || null;
+      }
 
       const { data, error } = await supabase
         .from("milesight_devices")
-        .update({
-          assignment: dbAssignment,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updates)
         .eq("device_uuid", deviceUuid)
-        .select("device_uuid,assignment,last_seen_at,record_type,latest_data")
+        .select("device_uuid,nickname,assignment,last_seen_at,record_type,latest_data")
         .maybeSingle();
 
       if (error) throw error;
