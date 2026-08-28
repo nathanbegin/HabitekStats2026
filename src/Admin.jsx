@@ -25,13 +25,22 @@ function formatDate(value) {
 
 const GATEWAY_ONLINE_WINDOW_MS = 30 * 60 * 1000;
 
-function isGatewayDevice(device) {
+function normalizeDevEUI(value) {
+  return String(value || "").replace(/[^a-fA-F0-9]/g, "").toUpperCase();
+}
+
+function isGatewayDevice(device, gatewayStatus) {
   if (!device) return false;
+
+  const apiDevEUI = normalizeDevEUI(gatewayStatus?.gateway?.devEUI);
+  const deviceDevEUI = normalizeDevEUI(device.device_uuid);
+  if (apiDevEUI && deviceDevEUI === apiDevEUI) return true;
+
   const nickname = String(device.nickname || "").toLowerCase();
   return (
-    device.record_type === "unknown" ||
     nickname.includes("gateway") ||
-    nickname.includes("sg50")
+    nickname.includes("sg50") ||
+    (!apiDevEUI && device.record_type === "unknown")
   );
 }
 
@@ -76,6 +85,9 @@ export default function Admin() {
   const [resetLoading, setResetLoading] = useState(false);
   const [resetError, setResetError] = useState("");
   const [activeSection, setActiveSection] = useState("devices");
+  const [gatewayStatus, setGatewayStatus] = useState(null);
+  const [gatewayStatusLoading, setGatewayStatusLoading] = useState(false);
+  const [gatewayStatusError, setGatewayStatusError] = useState("");
 
   const mappedCount = useMemo(
     () => devices.filter((device) => device.assignment).length,
@@ -146,9 +158,47 @@ export default function Admin() {
     }
   };
 
+  const loadGatewayStatus = async () => {
+    setGatewayStatusLoading(true);
+    setGatewayStatusError("");
+
+    try {
+      const response = await fetch("/api/admin/gateway-status", {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+
+      if (response.status === 401) {
+        setAuthenticated(false);
+        setGatewayStatus(null);
+        return;
+      }
+
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Impossible de charger l'état du SG50");
+      }
+
+      setGatewayStatus(payload);
+      if (payload?.configured === false && payload?.error) {
+        setGatewayStatusError(payload.error);
+      } else if (payload?.propertyError) {
+        setGatewayStatusError(
+          `État général disponible, mais détails énergie incomplets : ${payload.propertyError}`
+        );
+      }
+    } catch (error) {
+      setGatewayStatusError(error.message || "Impossible de charger l'état du SG50");
+    } finally {
+      setGatewayStatusLoading(false);
+    }
+  };
+
   const refreshAll = () => {
     loadDevices();
     loadLogs();
+    loadGatewayStatus();
   };
 
   useEffect(() => {
@@ -160,6 +210,14 @@ export default function Admin() {
 
     loadLogs();
     const id = setInterval(loadLogs, 10 * 1000);
+    return () => clearInterval(id);
+  }, [authenticated]);
+
+  useEffect(() => {
+    if (!authenticated) return undefined;
+
+    loadGatewayStatus();
+    const id = setInterval(loadGatewayStatus, 60 * 1000);
     return () => clearInterval(id);
   }, [authenticated]);
 
@@ -199,6 +257,8 @@ export default function Admin() {
     setAuthenticated(false);
     setDevices([]);
     setLogs([]);
+    setGatewayStatus(null);
+    setGatewayStatusError("");
   };
 
   const updateNicknameDraft = (deviceUuid, nickname) => {
@@ -599,7 +659,7 @@ export default function Admin() {
             <div>
               <h2 className="text-lg font-bold text-gray-900">Capteurs détectés</h2>
               <p className="text-sm text-gray-600">
-                Les DevEUI apparaissent automatiquement dès qu'un webhook valide est traité. Le gateway est identifié séparément. Il passe au vert dès qu’un webhook valide est reçu du gateway ou de n’importe quel capteur, ce qui confirme que la chaîne LoRaWAN fonctionne.
+                Les DevEUI apparaissent automatiquement dès qu'un webhook valide est traité. Le gateway est identifié séparément. Son état combine Milesight Open API et les webhooks reçus. Les informations batterie et solaire sont récupérées directement depuis Milesight lorsqu’elles sont disponibles.
               </p>
             </div>
           </div>
@@ -612,13 +672,23 @@ export default function Admin() {
             <div className="space-y-3">
               {devices.map((device) => {
                 const values = device.latest_data || {};
-                const isGateway = isGatewayDevice(device);
-                const gatewayOnline = isGateway
+                const isGateway = isGatewayDevice(device, gatewayStatus);
+                const webhookOnline = isGateway
                   ? gatewayIsOnline(device, latestDeviceWebhook)
                   : false;
-                const gatewayActivity = isGateway
+                const apiOnline =
+                  isGateway && gatewayStatus?.configured !== false
+                    ? gatewayStatus?.apiOnline === true
+                    : false;
+                const gatewayOnline = isGateway ? (webhookOnline || apiOnline) : false;
+                const localGatewayActivity = isGateway
                   ? gatewayActivityTimestamp(device, latestDeviceWebhook)
                   : null;
+                const apiLastUpdate = Number(gatewayStatus?.lastUpdateTime);
+                const gatewayActivity =
+                  isGateway && Number.isFinite(apiLastUpdate)
+                    ? Math.max(localGatewayActivity || 0, apiLastUpdate)
+                    : localGatewayActivity;
                 return (
                   <div key={device.device_uuid} className="bg-white rounded-2xl shadow p-4">
                     <div className="grid grid-cols-1 lg:grid-cols-[1.25fr_1fr_1fr_1fr] gap-4 items-center">
@@ -631,8 +701,8 @@ export default function Admin() {
                               }`}
                               title={
                                 gatewayOnline
-                                  ? "Gateway en ligne — webhook reçu du gateway ou d’un capteur dans les 30 dernières minutes"
-                                  : "Gateway hors ligne — aucun webhook de capteur ou du gateway reçu récemment"
+                                  ? "Gateway en ligne — Milesight Open API indique ONLINE ou un webhook récent confirme la chaîne LoRaWAN"
+                                  : "Gateway hors ligne — aucun signal récent via Milesight Open API ou webhook"
                               }
                               aria-label={gatewayOnline ? "Gateway en ligne" : "Gateway hors ligne"}
                             />
@@ -696,12 +766,26 @@ export default function Admin() {
                       <div className="text-sm text-gray-700">
                         <div>
                           <strong>Type :</strong>{" "}
-                          {isGateway ? "Gateway LoRaWAN SG50" : (device.record_type || "—")}
+                          {isGateway ? `Gateway LoRaWAN ${gatewayStatus?.gateway?.model || "SG50"}` : (device.record_type || "—")}
                         </div>
                         {isGateway ? (
-                          <div className="mt-1">
-                            <strong>Dernier webhook réseau :</strong>{" "}
-                            {formatDate(gatewayActivity)}
+                          <div className="mt-1 space-y-1">
+                            <div>
+                              <strong>État Milesight :</strong>{" "}
+                              {gatewayStatusLoading && !gatewayStatus
+                                ? "Chargement…"
+                                : gatewayStatus?.connectStatus || "—"}
+                            </div>
+                            <div>
+                              <strong>Dernière activité réseau :</strong>{" "}
+                              {formatDate(gatewayActivity)}
+                            </div>
+                            {gatewayStatus?.gateway?.firmwareVersion && (
+                              <div>
+                                <strong>Firmware :</strong>{" "}
+                                {gatewayStatus.gateway.firmwareVersion}
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div>
@@ -714,10 +798,50 @@ export default function Admin() {
 
                       {isGateway ? (
                         <div className="text-sm">
-                          <span className="block font-medium text-gray-700 mb-1">Rôle</span>
-                          <div className="w-full border rounded-xl px-3 py-2 bg-gray-50 text-gray-700">
-                            Passerelle LoRaWAN
+                          <span className="block font-medium text-gray-700 mb-1">Énergie SG50</span>
+                          <div className="w-full border rounded-xl px-3 py-2 bg-gray-50 text-gray-700 space-y-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <span>🔋 Batterie</span>
+                              <strong>
+                                {gatewayStatus?.battery?.level !== null &&
+                                gatewayStatus?.battery?.level !== undefined
+                                  ? `${gatewayStatus.battery.level}%`
+                                  : "—"}
+                              </strong>
+                            </div>
+                            <div className="flex items-center justify-between gap-2">
+                              <span>État batterie</span>
+                              <span>{gatewayStatus?.battery?.status || "—"}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-2">
+                              <span>☀️ Solaire</span>
+                              <span
+                                className={
+                                  gatewayStatus?.solar?.active === true
+                                    ? "font-semibold text-green-700"
+                                    : gatewayStatus?.solar?.active === false
+                                    ? "font-semibold text-gray-600"
+                                    : ""
+                                }
+                              >
+                                {gatewayStatus?.solar?.label || "—"}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-2">
+                              <span>🌡️ Batterie</span>
+                              <span>
+                                {gatewayStatus?.battery?.temperature !== null &&
+                                gatewayStatus?.battery?.temperature !== undefined
+                                  ? `${gatewayStatus.battery.temperature} °C`
+                                  : "—"}
+                              </span>
+                            </div>
                           </div>
+                          {gatewayStatusError && (
+                            <div className="mt-2 text-xs text-amber-700">
+                              {gatewayStatusError}
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <label className="text-sm">
