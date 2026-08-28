@@ -35,10 +35,18 @@ function isGatewayDevice(device) {
   );
 }
 
-function gatewayIsOnline(device) {
-  const lastSeen = new Date(device?.last_seen_at || "").getTime();
-  if (!Number.isFinite(lastSeen)) return false;
-  return Date.now() - lastSeen <= GATEWAY_ONLINE_WINDOW_MS;
+function gatewayActivityTimestamp(device, latestDeviceWebhook) {
+  const deviceLastSeen = new Date(device?.last_seen_at || "").getTime();
+  const webhookLastSeen = new Date(latestDeviceWebhook?.received_at || "").getTime();
+
+  const timestamps = [deviceLastSeen, webhookLastSeen].filter(Number.isFinite);
+  return timestamps.length ? Math.max(...timestamps) : null;
+}
+
+function gatewayIsOnline(device, latestDeviceWebhook) {
+  const lastActivity = gatewayActivityTimestamp(device, latestDeviceWebhook);
+  if (!Number.isFinite(lastActivity)) return false;
+  return Date.now() - lastActivity <= GATEWAY_ONLINE_WINDOW_MS;
 }
 
 function StatusBadge({ status }) {
@@ -75,6 +83,13 @@ export default function Admin() {
   );
 
   const latestWebhook = logs[0] || null;
+  const latestDeviceWebhook =
+    logs.find(
+      (log) =>
+        log.status === "processed" &&
+        Array.isArray(log.device_uuids) &&
+        log.device_uuids.length > 0
+    ) || null;
 
   const loadDevices = async () => {
     setLoading(true);
@@ -584,7 +599,7 @@ export default function Admin() {
             <div>
               <h2 className="text-lg font-bold text-gray-900">Capteurs détectés</h2>
               <p className="text-sm text-gray-600">
-                Les DevEUI apparaissent automatiquement dès qu'un webhook valide est traité. Le gateway est identifié séparément avec son état en ligne/hors ligne selon l'heure du dernier webhook.
+                Les DevEUI apparaissent automatiquement dès qu'un webhook valide est traité. Le gateway est identifié séparément. Il passe au vert dès qu’un webhook valide est reçu du gateway ou de n’importe quel capteur, ce qui confirme que la chaîne LoRaWAN fonctionne.
               </p>
             </div>
           </div>
@@ -598,7 +613,12 @@ export default function Admin() {
               {devices.map((device) => {
                 const values = device.latest_data || {};
                 const isGateway = isGatewayDevice(device);
-                const gatewayOnline = isGateway ? gatewayIsOnline(device) : false;
+                const gatewayOnline = isGateway
+                  ? gatewayIsOnline(device, latestDeviceWebhook)
+                  : false;
+                const gatewayActivity = isGateway
+                  ? gatewayActivityTimestamp(device, latestDeviceWebhook)
+                  : null;
                 return (
                   <div key={device.device_uuid} className="bg-white rounded-2xl shadow p-4">
                     <div className="grid grid-cols-1 lg:grid-cols-[1.25fr_1fr_1fr_1fr] gap-4 items-center">
@@ -611,8 +631,8 @@ export default function Admin() {
                               }`}
                               title={
                                 gatewayOnline
-                                  ? "Gateway en ligne — webhook reçu dans les 30 dernières minutes"
-                                  : "Gateway hors ligne — aucun webhook récent"
+                                  ? "Gateway en ligne — webhook reçu du gateway ou d’un capteur dans les 30 dernières minutes"
+                                  : "Gateway hors ligne — aucun webhook de capteur ou du gateway reçu récemment"
                               }
                               aria-label={gatewayOnline ? "Gateway en ligne" : "Gateway hors ligne"}
                             />
@@ -623,7 +643,8 @@ export default function Admin() {
                           {device.device_uuid}
                         </div>
                         <div className="text-xs text-gray-500 mt-2">
-                          Dernier webhook : {formatDate(device.last_seen_at)}
+                          {isGateway ? "Dernière activité réseau" : "Dernier webhook"} :{" "}
+                          {formatDate(isGateway ? gatewayActivity : device.last_seen_at)}
                         </div>
                         {isGateway && (
                           <div
@@ -679,8 +700,8 @@ export default function Admin() {
                         </div>
                         {isGateway ? (
                           <div className="mt-1">
-                            <strong>Dernière activité :</strong>{" "}
-                            {formatDate(device.last_seen_at)}
+                            <strong>Dernier webhook réseau :</strong>{" "}
+                            {formatDate(gatewayActivity)}
                           </div>
                         ) : (
                           <div>
