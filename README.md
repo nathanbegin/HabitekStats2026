@@ -43,6 +43,9 @@ VITE_SUPABASE_ANON_KEY=...
 SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=...
 MILESIGHT_WEBHOOK_SECRET=...
+MILESIGHT_API_BASE_URL=https://us-openapi.milesight.com
+MILESIGHT_CLIENT_ID=...
+MILESIGHT_CLIENT_SECRET=...
 ```
 
 Important :
@@ -170,6 +173,37 @@ Dans `/admin`, chaque DevEUI peut être assigné à :
 - **Non assigné**
 
 Les assignations sont enregistrées dans Supabase et le dashboard recharge automatiquement les mappings environ toutes les 60 secondes. Aucun redéploiement Vercel n'est nécessaire lorsqu'une assignation change.
+
+### État du Gateway SG50
+
+La console `/admin` interroge aussi la **Milesight Development Platform Open API** pour enrichir la carte du SG50 avec :
+
+- le statut `ONLINE / OFFLINE / DISCONNECT`;
+- le niveau de batterie;
+- l'état de charge/décharge;
+- l'état solaire;
+- la température batterie;
+- le firmware et l'heure du dernier rapport.
+
+Variables Vercel requises :
+
+```
+MILESIGHT_API_BASE_URL=https://us-openapi.milesight.com
+MILESIGHT_CLIENT_ID=...
+MILESIGHT_CLIENT_SECRET=...
+```
+
+Le Client Secret doit rester uniquement côté serveur et ne doit jamais utiliser le préfixe `VITE_`.
+
+Si plusieurs gateways sont associés à la même Application Milesight, il est possible de forcer celui à afficher avec l'une des variables suivantes :
+
+```
+MILESIGHT_GATEWAY_DEVICE_ID=...
+MILESIGHT_GATEWAY_DEVEUI=...
+```
+
+Sans ces variables optionnelles, le backend recherche automatiquement un device de type `GATEWAY` et privilégie le modèle `SG50`.
+
 
 ### Mise à jour Supabase requise
 
