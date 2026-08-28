@@ -19,8 +19,6 @@ const translations = {
     tempExt: "Temp. Ext.",
     humExt: "Hum. Ext.",
     lastUpdate: "Dernière MAJ",
-    cameraSnapshot: "Dernière capture caméra",
-    noImageAvailable: "Aucune image disponible",
     selectBuilding: "Sélectionne une cabane HabiTEK pour afficher ses statistiques de température et d’humidité.",
     dataNotAvailable: "Données historiques non disponibles pour cette cabane (ND)",
     buildingStats: "Statistiques de la cabane :",
@@ -70,8 +68,6 @@ const translations = {
     tempExt: "Outdoor Temp.",
     humExt: "Outdoor Hum.",
     lastUpdate: "Last Update",
-    cameraSnapshot: "Latest Camera Snapshot",
-    noImageAvailable: "No image available",
     selectBuilding: "Select a HabiTEK cabin to view its temperature and humidity statistics.",
     dataNotAvailable: "Historical data not available for this cabin (NA)",
     buildingStats: "Cabin Statistics:",
@@ -177,7 +173,6 @@ function AppContent() {
   const [comparisonData, setComparisonData] = useState([]); // Stores data for both HabiTEK cabins for comparison chart
   const [latestStats, setLatestStats] = useState({}); // Stores the very latest stats for each building (for current conditions panel)
   const [deviceMap, setDeviceMap] = useState({}); // DevEUI assignments managed from /admin
-  const [snapshotUrl, setSnapshotUrl] = useState(''); // URL for camera snapshot
   const [compareBuildings, setCompareBuildings] = useState(['Code', 'PassiveHouse']); // Buildings selected for comparison
   const [compareSeries, setCompareSeries] = useState([]); // Formatted series for comparison chart
   const [error, setError] = useState(false); // Error state for API calls
@@ -550,10 +545,6 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
           const deviceMapping = deviceMap[liveData.device_uuid];
           if (!deviceMapping) return;
 
-          if (liveData.record_type === 'camera' && liveData.values?.image) {
-            setSnapshotUrl(liveData.values.image);
-          }
-
           if (liveData.record_type !== 'sensor' || !liveData.values) return;
 
           const newTimestamp = new Date(liveData.timestamp);
@@ -755,20 +746,6 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
     const intervalId = setInterval(loadAllLatestStats, 5 * 60 * 1000); // Refresh every 5 mins
     return () => clearInterval(intervalId);
   }, [useFakeData, language, deviceMap]);
-
-  // Update camera snapshot every 15 minutes using a placeholder image (if not updated by WS)
-  useEffect(() => {
-    const updateSnapshot = () => {
-      if (!snapshotUrl || snapshotUrl.startsWith('https://placehold.co')) {
-        const ts = Date.now();
-        const timeString = new Date(ts).toLocaleTimeString(language === 'fr' ? 'fr-CA' : 'en-CA', {hour:'2-digit', minute:'2-digit'});
-        setSnapshotUrl(`https://placehold.co/640x480/E0E0E0/333333?text=Snapshot+${timeString}`);
-      }
-    };
-    updateSnapshot();
-    const id = setInterval(updateSnapshot, 15 * 60 * 1000);
-    return () => clearInterval(id);
-  }, [snapshotUrl, language]);
 
   const buildComparisonSeriesForPair = (pair) => {
     return pair.flatMap((b, index) => {
@@ -1269,21 +1246,7 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
         )}
       </div>
 
-      {/* Camera snapshot section */}
-      <div className="bg-white p-4 rounded-2xl shadow mb-6">
-        <h2 className="text-xl font-semibold mb-4 text-center text-gray-800">{t('cameraSnapshot')}</h2>
-        <div className="flex justify-center">
-          {snapshotUrl ? (
-            <img src={snapshotUrl} alt="Camera snapshot" className="max-w-full rounded" />
-          ) : (
-            <div className="flex items-center justify-center w-full h-48 bg-gray-200 rounded text-gray-500">
-              {t('noImageAvailable')}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Moved: Building selector between camera and main chart */}
+      {/* Cabin selector */}
       <div className="bg-white p-4 rounded-2xl shadow mb-6">
         <p className="text-center text-sm text-gray-600 mb-2 px-4">
           {t('selectBuilding')}
