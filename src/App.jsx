@@ -1177,34 +1177,42 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
 
   return (
     <div className="p-4 max-w-6xl mx-auto">
-      <div className="flex justify-between items-center mb-4"> 
-        <h1 className="text-3xl font-bold">{t('event')}</h1>  
-      </div>
-      <div className="flex justify-between items-center mb-4">            
-        <h1 className="text-2xl font-bold">{t('appTitle')}</h1>
-        {/* Language selection buttons are now handled by the RootApp,
-            but we need a way to change language from here.
-            We'll pass setLanguage down from RootApp or use a different context setup.
-            For now, let's assume setLanguage is available from context. */}
-        <LanguageContext.Consumer>
-          {({ setLanguage: contextSetLanguage }) => (
-            <div className="flex space-x-2">
-              <button
-                onClick={() => contextSetLanguage('fr')}
-                className={`px-3 py-1 rounded ${language === 'fr' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'}`}
-              >
-                FR
-              </button>
-              <button
-                onClick={() => contextSetLanguage('en')}
-                className={`px-3 py-1 rounded ${language === 'en' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'}`}
-              >
-                EN
-              </button>
+      <header className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-5 mb-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-5">
+            <a href="/" className="shrink-0" aria-label="HabiTEK - Accueil">
+              <img
+                src="/habitek-logo.svg"
+                alt="HabiTEK"
+                className="w-64 sm:w-72 md:w-80 h-auto object-contain"
+              />
+            </a>
+            <div className="sm:border-l sm:border-gray-200 sm:pl-5">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{t('event')}</h1>
+              <p className="mt-1 text-sm sm:text-base font-medium text-gray-600">{t('appTitle')}</p>
             </div>
-          )}
-        </LanguageContext.Consumer>
-      </div>
+          </div>
+
+          <LanguageContext.Consumer>
+            {({ setLanguage: contextSetLanguage }) => (
+              <div className="flex space-x-2 self-start md:self-center">
+                <button
+                  onClick={() => contextSetLanguage('fr')}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${language === 'fr' ? 'bg-red-700 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                >
+                  FR
+                </button>
+                <button
+                  onClick={() => contextSetLanguage('en')}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${language === 'en' ? 'bg-red-700 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                >
+                  EN
+                </button>
+              </div>
+            )}
+          </LanguageContext.Consumer>
+        </div>
+      </header>
 
       {/* Latest Conditions for Both HabiTEK Cabins */}
       <div className="bg-white p-4 rounded-2xl shadow mb-6">
