@@ -163,6 +163,45 @@ export default function Admin() {
     setLogs([]);
   };
 
+  const updateNicknameDraft = (deviceUuid, nickname) => {
+    setDevices((current) =>
+      current.map((device) =>
+        device.device_uuid === deviceUuid ? { ...device, nickname } : device
+      )
+    );
+  };
+
+  const saveNickname = async (deviceUuid, nickname) => {
+    setMessage("");
+
+    const response = await fetch("/api/admin/devices", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({
+        device_uuid: deviceUuid,
+        nickname,
+      }),
+    });
+
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      setMessage(payload.error || "Le surnom n'a pas pu être enregistré.");
+      await loadDevices();
+      return;
+    }
+
+    const savedDevice = await response.json();
+    setDevices((current) =>
+      current.map((device) =>
+        device.device_uuid === deviceUuid
+          ? { ...device, nickname: savedDevice.nickname || "" }
+          : device
+      )
+    );
+    setMessage("Surnom enregistré.");
+  };
+
   const assign = async (deviceUuid, assignment) => {
     setMessage("");
 
@@ -248,7 +287,7 @@ export default function Admin() {
             <div className="text-sm font-semibold text-blue-600">HabiTEK 2026</div>
             <h1 className="text-2xl font-bold text-gray-900">Administration Milesight</h1>
             <p className="text-sm text-gray-600 mt-1">
-              Réception des webhooks, DevEUI détectés et assignation des capteurs.
+              Réception des webhooks, DevEUI détectés, surnoms et assignation des capteurs.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -335,9 +374,17 @@ export default function Admin() {
                       <div>
                         <span className="font-medium text-gray-700">DevEUI :</span>{" "}
                         {uuids.length ? (
-                          uuids.map((uuid) => (
-                            <span key={uuid} className="font-mono text-xs break-all mr-2">{uuid}</span>
-                          ))
+                          uuids.map((uuid) => {
+                            const matchingDevice = devices.find((device) => device.device_uuid === uuid);
+                            return (
+                              <span key={uuid} className="inline-flex flex-col mr-3 align-middle">
+                                {matchingDevice?.nickname && (
+                                  <span className="font-semibold text-gray-800">{matchingDevice.nickname}</span>
+                                )}
+                                <span className="font-mono text-xs break-all text-gray-500">{uuid}</span>
+                              </span>
+                            );
+                          })
                         ) : (
                           <span className="text-gray-400">aucun détecté</span>
                         )}
@@ -365,7 +412,7 @@ export default function Admin() {
             <div>
               <h2 className="text-lg font-bold text-gray-900">Capteurs détectés</h2>
               <p className="text-sm text-gray-600">
-                Les DevEUI apparaissent automatiquement dès qu'un webhook valide est traité.
+                Les DevEUI apparaissent automatiquement dès qu'un webhook valide est traité. Tu peux leur donner un surnom pour les reconnaître rapidement.
               </p>
             </div>
           </div>
@@ -380,7 +427,7 @@ export default function Admin() {
                 const values = device.latest_data || {};
                 return (
                   <div key={device.device_uuid} className="bg-white rounded-2xl shadow p-4">
-                    <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr_1fr] gap-4 items-center">
+                    <div className="grid grid-cols-1 lg:grid-cols-[1.25fr_1fr_1fr_1fr] gap-4 items-center">
                       <div>
                         <div className="text-xs uppercase tracking-wide text-gray-400">DevEUI</div>
                         <div className="font-mono font-semibold text-gray-900 break-all">
@@ -388,6 +435,37 @@ export default function Admin() {
                         </div>
                         <div className="text-xs text-gray-500 mt-2">
                           Dernier webhook : {formatDate(device.last_seen_at)}
+                        </div>
+                      </div>
+
+                      <div className="text-sm">
+                        <label className="block font-medium text-gray-700 mb-1" htmlFor={`nickname-${device.device_uuid}`}>
+                          Surnom
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            id={`nickname-${device.device_uuid}`}
+                            type="text"
+                            maxLength={80}
+                            value={device.nickname || ""}
+                            onChange={(event) => updateNicknameDraft(device.device_uuid, event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                saveNickname(device.device_uuid, device.nickname || "");
+                                event.currentTarget.blur();
+                              }
+                            }}
+                            placeholder="Ex. Code intérieur"
+                            className="min-w-0 w-full border rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => saveNickname(device.device_uuid, device.nickname || "")}
+                            className="shrink-0 px-3 py-2 border rounded-xl text-xs font-semibold hover:bg-gray-50"
+                          >
+                            Enregistrer
+                          </button>
                         </div>
                       </div>
 
