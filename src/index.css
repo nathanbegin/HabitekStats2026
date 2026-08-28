@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Make ApexCharts toolbar buttons slightly larger */
+.apexcharts-toolbar button {
+  width: 28px;
+  height: 28px;
+}
+.apexcharts-toolbar svg {
+  width: 24px;
+  height: 24px;
+}
