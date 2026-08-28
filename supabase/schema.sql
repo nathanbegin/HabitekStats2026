@@ -52,6 +52,11 @@ create table if not exists public.milesight_devices (
   updated_at timestamptz not null default now()
 );
 
+-- Keep this ALTER because "create table if not exists" does not add new columns
+-- to an existing milesight_devices table.
+alter table public.milesight_devices
+  add column if not exists nickname text;
+
 create index if not exists milesight_devices_last_seen_idx
   on public.milesight_devices (last_seen_at desc);
 
