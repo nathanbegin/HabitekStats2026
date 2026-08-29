@@ -295,129 +295,53 @@ export default function Admin() {
   const syncGatewayEnergy = async () => {
     if (gatewayManualSyncing) return;
 
-    const deviceId = String(gatewayStatus?.gateway?.deviceId || "").trim();
-    if (!deviceId) {
-      setGatewayStatusError(
-        "deviceId du SG50 indisponible. Actualise d'abord l'état Milesight."
-      );
-      return;
-    }
-
     setGatewayManualSyncing(true);
     setGatewayStatusError("");
-    setGatewayQueryMessage("");
 
     try {
-      const [devicesResponse, latestResponse] = await Promise.all([
+      const [devicesResponse, gatewayResponse] = await Promise.all([
         fetch("/api/admin/devices", {
           credentials: "same-origin",
           cache: "no-store",
         }),
-        fetch(
-          `/api/admin/gateway-latest?deviceId=${encodeURIComponent(deviceId)}`,
-          {
-            credentials: "same-origin",
-            cache: "no-store",
-          }
-        ),
+        fetch("/api/admin/gateway-status", {
+          credentials: "same-origin",
+          cache: "no-store",
+        }),
       ]);
 
-      if (devicesResponse.status === 401 || latestResponse.status === 401) {
+      if (devicesResponse.status === 401 || gatewayResponse.status === 401) {
         setAuthenticated(false);
         return;
       }
 
-      const [devicesPayload, latestPayload] = await Promise.all([
+      const [devicesPayload, gatewayPayload] = await Promise.all([
         devicesResponse.json().catch(() => []),
-        latestResponse.json().catch(() => ({})),
+        gatewayResponse.json().catch(() => ({})),
       ]);
 
       if (!devicesResponse.ok) {
         throw new Error("Impossible de récupérer le dernier webhook du gateway.");
       }
 
-      if (!latestResponse.ok) {
+      if (!gatewayResponse.ok) {
         throw new Error(
-          latestPayload.error ||
-            "Impossible d'appeler GET /devices/{deviceId} pour le SG50."
+          gatewayPayload.error || "Impossible de récupérer les informations Milesight du SG50."
         );
       }
 
-      const direct = latestPayload?.device || {};
-
       setDevices(Array.isArray(devicesPayload) ? devicesPayload : []);
-      setGatewayStatus((current) => ({
-        ...(current || {}),
-        connectStatus: direct.connectStatus ?? current?.connectStatus ?? null,
-        apiOnline:
-          direct.connectStatus != null
-            ? direct.connectStatus === "ONLINE"
-            : current?.apiOnline ?? false,
-        lastUpdateTime:
-          direct.lastUpdateTime ?? current?.lastUpdateTime ?? null,
-        gateway: {
-          ...(current?.gateway || {}),
-          deviceId: direct.deviceId || current?.gateway?.deviceId || deviceId,
-          devEUI: direct.devEUI ?? current?.gateway?.devEUI ?? null,
-          sn: direct.sn ?? current?.gateway?.sn ?? null,
-          name: direct.name ?? current?.gateway?.name ?? null,
-          model: direct.model ?? current?.gateway?.model ?? "SG50",
-          firmwareVersion:
-            direct.firmwareVersion ??
-            current?.gateway?.firmwareVersion ??
-            null,
-          hardwareVersion:
-            direct.hardwareVersion ??
-            current?.gateway?.hardwareVersion ??
-            null,
-        },
-        battery: {
-          ...(current?.battery || {}),
-          level:
-            direct?.battery?.level ??
-            direct.electricity ??
-            current?.battery?.level ??
-            null,
-          status:
-            direct?.battery?.status ??
-            current?.battery?.status ??
-            null,
-          statusRaw:
-            direct?.battery?.statusRaw ??
-            current?.battery?.statusRaw ??
-            null,
-          temperature:
-            direct?.battery?.temperature ??
-            current?.battery?.temperature ??
-            null,
-        },
-        solar: {
-          ...(current?.solar || {}),
-          active:
-            direct?.solar?.active ??
-            current?.solar?.active ??
-            null,
-          label:
-            direct?.solar?.label ??
-            current?.solar?.label ??
-            null,
-          raw:
-            direct?.solar?.raw ??
-            current?.solar?.raw ??
-            null,
-        },
-        directGet: {
-          route: latestPayload?.route || "/device/openapi/v1/devices/{deviceId}",
-          fetchedAt: latestPayload?.fetchedAt || Date.now(),
-        },
-      }));
+      setGatewayStatus(gatewayPayload);
 
-      setGatewayLastManualSync(
-        latestPayload?.fetchedAt || new Date().toISOString()
-      );
-      setGatewayQueryMessage(
-        "Dernière information récupérée directement avec GET /devices/{deviceId}."
-      );
+      if (gatewayPayload?.configured === false && gatewayPayload?.error) {
+        setGatewayStatusError(gatewayPayload.error);
+      } else if (gatewayPayload?.propertyError) {
+        setGatewayStatusError(
+          `État général disponible, mais détails énergie incomplets : ${gatewayPayload.propertyError}`
+        );
+      }
+
+      setGatewayLastManualSync(new Date().toISOString());
     } catch (error) {
       setGatewayStatusError(
         error.message || "Impossible de synchroniser les informations du gateway."
@@ -974,9 +898,9 @@ export default function Admin() {
                   ? gatewayEnergyFromWebhook(values)
                   : null;
                 const gatewayBatteryLevel =
-                  gatewayStatus?.directGet
-                    ? gatewayStatus?.battery?.level ?? webhookEnergy?.batteryLevel ?? null
-                    : webhookEnergy?.batteryLevel ?? gatewayStatus?.battery?.level ?? null;
+                  webhookEnergy?.batteryLevel ??
+                  gatewayStatus?.battery?.level ??
+                  null;
                 const gatewayBatteryStatus =
                   webhookEnergy?.batteryStatus ??
                   gatewayStatus?.battery?.status ??
@@ -1116,10 +1040,10 @@ export default function Admin() {
                                   onClick={syncGatewayEnergy}
                                   disabled={gatewayManualSyncing}
                                   className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                                  title="Appeler directement GET /device/openapi/v1/devices/{deviceId}"
+                                  title="Récupérer les dernières informations déjà disponibles"
                                 >
                                   <span aria-hidden="true" className={gatewayManualSyncing ? "animate-spin" : ""}>↻</span>
-                                  {gatewayManualSyncing ? "Synchronisation…" : "Obtenir dernière info"}
+                                  {gatewayManualSyncing ? "Synchronisation…" : "Synchroniser"}
                                 </button>
 
                                 <button
