@@ -143,12 +143,54 @@ const lightenColor = (color, percent) => {
   return '#' + ((1 << 24) + (R << 16) + (G << 8) + B).toString(16).slice(1);
 };
 
-// Normalize a date to a YYYY-MM-DD key to group daily statistics
+// All user-facing timestamps are rendered in the browser's own IANA timezone.
+const getBrowserTimeZone = () => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const localeForLanguage = (language) =>
+  language === 'fr' ? 'fr-CA' : 'en-CA';
+
+const browserTimeZoneOptions = (options = {}) => {
+  const timeZone = getBrowserTimeZone();
+  return timeZone ? { ...options, timeZone } : options;
+};
+
+const formatBrowserDateTime = (value, language, options = {}) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return 'N/A';
+
+  return date.toLocaleString(
+    localeForLanguage(language),
+    browserTimeZoneOptions(options)
+  );
+};
+
+// Normalize a date to a YYYY-MM-DD key in the browser's timezone.
 const getDayKey = (date) => {
-  const d = new Date(date);
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${month}-${day}`;
+  const d = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) return '';
+
+  const parts = new Intl.DateTimeFormat(
+    'en-CA',
+    browserTimeZoneOptions({
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+  ).formatToParts(d);
+
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value])
+  );
+
+  return `${values.year}-${values.month}-${values.day}`;
 };
 
 // Define available sensor keys with their labels and base colors
@@ -465,7 +507,10 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
         temperature_ext: (15 + Math.random() * 10).toFixed(1),
         humidity_int: (40 + Math.random() * 20).toFixed(0),
         humidity_ext: (50 + Math.random() * 30).toFixed(0),
-        timestamp: new Date().toLocaleString(language === 'fr' ? 'fr-CA' : 'en-CA', { dateStyle: 'medium', timeStyle: 'short' }),
+        timestamp: formatBrowserDateTime(new Date(), language, {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        }),
       };
     }
 
@@ -527,7 +572,12 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
         if (key.endsWith('_ts')) delete latestDataForBuilding[key];
       });
 
-      latestDataForBuilding.timestamp = latestOverallTimestamp ? new Date(latestOverallTimestamp).toLocaleString(language === 'fr' ? 'fr-CA' : 'en-CA', { dateStyle: 'medium', timeStyle: 'short' }) : 'N/A';
+      latestDataForBuilding.timestamp = latestOverallTimestamp
+        ? formatBrowserDateTime(latestOverallTimestamp, language, {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+          })
+        : 'N/A';
       return latestDataForBuilding;
 
     } catch (e) {
@@ -631,8 +681,9 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
                 }
               }
 
-              updatedStats.timestamp = newTimestamp.toLocaleString(
-                language === 'fr' ? 'fr-CA' : 'en-CA',
+              updatedStats.timestamp = formatBrowserDateTime(
+                newTimestamp,
+                language,
                 { dateStyle: 'medium', timeStyle: 'short' }
               );
 
@@ -847,12 +898,28 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
   // Formatter for X-axis labels
   const xAxisLabelFormatter = (value, timestamp) => {
     const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return '';
+
+    const locale = localeForLanguage(language);
+    const timeOptions = browserTimeZoneOptions({
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
     if (timeWindow.hours <= 12) {
-      return date.toLocaleTimeString(language === 'fr' ? 'fr-CA' : 'en-CA', { hour: '2-digit', minute: '2-digit' });
-    } else {
-      return date.toLocaleDateString(language === 'fr' ? 'fr-CA' : 'en-CA', { day: '2-digit', month: 'short' }) + ' ' +
-             date.toLocaleTimeString(language === 'fr' ? 'fr-CA' : 'en-CA', { hour: '2-digit', minute: '2-digit' });
+      return date.toLocaleTimeString(locale, timeOptions);
     }
+
+    const dateOptions = browserTimeZoneOptions({
+      day: '2-digit',
+      month: 'short',
+    });
+
+    return (
+      date.toLocaleDateString(locale, dateOptions) +
+      ' ' +
+      date.toLocaleTimeString(locale, timeOptions)
+    );
   };
 
   const CHART_ID = 'timeseries';
@@ -1485,6 +1552,7 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
                 min: timeWindow.start.getTime(),
                 max: timeWindow.end.getTime(),
                 labels: {
+                  datetimeUTC: false,
                   rotate: isMobile ? -25 : -45,
                   fontSize: isMobile ? '10px' : '11px',
                   maxHeight: 80,
@@ -1731,7 +1799,7 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
               },
               xaxis: {
                 type: 'datetime',
-                labels: { rotate: isMobile ? -25 : -45, formatter: xAxisLabelFormatter, style: { fontSize: isMobile ? '10px' : '11px' } },
+                labels: { datetimeUTC: false, rotate: isMobile ? -25 : -45, formatter: xAxisLabelFormatter, style: { fontSize: isMobile ? '10px' : '11px' } },
                 min: timeWindow.start.getTime(),
                 max: timeWindow.end.getTime(),
                 tooltip: { enabled: false },
