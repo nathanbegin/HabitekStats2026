@@ -1557,7 +1557,6 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
                   fontSize: isMobile ? '10px' : '11px',
                   maxHeight: 80,
                   formatter: xAxisLabelFormatter,
-                  datetimeUTC: false,
                   offsetY: 0,
                   trim: true
                 },
