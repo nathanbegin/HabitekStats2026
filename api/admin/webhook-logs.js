@@ -25,8 +25,19 @@ function averageIntervalSeconds(timestamps) {
 }
 
 async function getWebhookStats(supabase) {
-  const now = Date.now();
-  const cutoff = new Date(now - 24 * 60 * 60 * 1000).toISOString();
+  const now = new Date();
+  const cutoffDate = new Date(
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      0,
+      0,
+      0,
+      0
+    )
+  );
+  const cutoff = cutoffDate.toISOString();
   const rows = [];
 
   for (let offset = 0; offset < MAX_ROWS; offset += PAGE_SIZE) {
@@ -105,9 +116,9 @@ async function getWebhookStats(supabase) {
     : null;
 
   return {
-    window_hours: 24,
+    reset_basis: "00:00:00 UTC",
     from: cutoff,
-    to: new Date(now).toISOString(),
+    to: now.toISOString(),
     webhook_requests: totalRequests,
     event_count: totalEvents,
     unattributed_requests: unattributedRequests,
@@ -152,7 +163,7 @@ export default async function handler(req, res) {
     return res.status(500).json({
       error:
         req.query?.view === "stats"
-          ? "Impossible de calculer les statistiques webhook des dernières 24 h."
+          ? "Impossible de calculer les statistiques webhook depuis 00:00 UTC."
           : "Impossible de charger les logs webhook",
     });
   }
