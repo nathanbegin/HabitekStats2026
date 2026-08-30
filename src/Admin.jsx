@@ -289,14 +289,14 @@ export default function Admin() {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(
-          payload.error || "Impossible de charger les statistiques webhook 24 h"
+          payload.error || "Impossible de charger les statistiques webhook depuis 00:00 UTC"
         );
       }
 
       setWebhookStats(payload);
     } catch (error) {
       setWebhookStatsError(
-        error.message || "Impossible de charger les statistiques webhook 24 h"
+        error.message || "Impossible de charger les statistiques webhook depuis 00:00 UTC"
       );
     } finally {
       setWebhookStatsLoading(false);
@@ -827,7 +827,7 @@ export default function Admin() {
             <div>
               <h2 className="text-lg font-bold text-gray-900">Réception webhook Milesight</h2>
               <p className="text-sm text-gray-600 mt-1">
-                Jauge des dernières 24 h, répartition par appareil et journal des 50 dernières requêtes reçues par <span className="font-mono">/api/milesight-webhook</span>.
+                Jauge depuis 00:00 UTC, répartition par appareil et journal des 50 dernières requêtes reçues par <span className="font-mono">/api/milesight-webhook</span>.
               </p>
             </div>
             <div className="text-xs text-gray-500">
@@ -839,7 +839,7 @@ export default function Admin() {
             <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
               <div>
                 <div className="text-xs font-bold uppercase tracking-wide text-gray-500">
-                  Utilisation webhook — fenêtre glissante 24 h
+                  Utilisation webhook — cycle quotidien UTC
                 </div>
                 <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
                   <span className="text-3xl font-bold text-gray-900">
@@ -874,7 +874,7 @@ export default function Admin() {
             <div
               className="mt-3 h-4 w-full overflow-hidden rounded-full bg-gray-200"
               role="progressbar"
-              aria-label="Utilisation du quota webhook sur 24 heures"
+              aria-label="Utilisation du quota webhook depuis minuit UTC"
               aria-valuemin="0"
               aria-valuemax={webhookStats?.quota_limit ?? 1000}
               aria-valuenow={webhookStats?.webhook_requests ?? 0}
@@ -892,7 +892,7 @@ export default function Admin() {
                 De {formatDate(webhookStats?.from)} à {formatDate(webhookStats?.to)}
               </span>
               <span>
-                Estimation locale sur 24 h; le cycle exact du quota Milesight peut différer.
+                Compteur local réinitialisé à 00:00:00 UTC pour correspondre au cycle supposé de Milesight.
               </span>
             </div>
 
@@ -905,7 +905,7 @@ export default function Admin() {
             {webhookStats?.devices?.length > 0 && (
               <div className="mt-5 overflow-x-auto">
                 <div className="mb-2 text-sm font-bold text-gray-900">
-                  Webhooks par appareil — dernières 24 h
+                  Webhooks par appareil — depuis 00:00 UTC
                 </div>
                 <table className="w-full min-w-[720px] text-sm">
                   <thead>
