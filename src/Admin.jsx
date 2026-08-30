@@ -275,7 +275,7 @@ export default function Admin() {
     setWebhookStatsError("");
 
     try {
-      const response = await fetch("/api/admin/webhook-stats", {
+      const response = await fetch("/api/admin/webhook-logs?view=stats", {
         credentials: "same-origin",
         cache: "no-store",
       });
