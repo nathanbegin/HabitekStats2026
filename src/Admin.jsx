@@ -154,6 +154,28 @@ function StatusBadge({ status }) {
   );
 }
 
+function formatIntervalSeconds(value) {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds) || seconds < 0) return "—";
+
+  if (seconds < 60) return String(Math.round(seconds)) + " s";
+
+  const minutes = seconds / 60;
+  if (minutes < 60) {
+    return (minutes < 10 ? minutes.toFixed(1) : String(Math.round(minutes))) + " min";
+  }
+
+  const hours = minutes / 60;
+  return hours.toFixed(hours < 10 ? 1 : 0) + " h";
+}
+
+function webhookQuotaBarClass(percent) {
+  const value = Number(percent || 0);
+  if (value >= 90) return "bg-red-600";
+  if (value >= 70) return "bg-amber-500";
+  return "bg-green-600";
+}
+
 export default function Admin() {
   const [password, setPassword] = useState("");
   const [devices, setDevices] = useState([]);
@@ -163,6 +185,9 @@ export default function Admin() {
   const [logsLoading, setLogsLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [logsError, setLogsError] = useState("");
+  const [webhookStats, setWebhookStats] = useState(null);
+  const [webhookStatsLoading, setWebhookStatsLoading] = useState(false);
+  const [webhookStatsError, setWebhookStatsError] = useState("");
   const [resetOpen, setResetOpen] = useState(false);
   const [resetPassword, setResetPassword] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
@@ -245,6 +270,39 @@ export default function Admin() {
     }
   };
 
+  const loadWebhookStats = async () => {
+    setWebhookStatsLoading(true);
+    setWebhookStatsError("");
+
+    try {
+      const response = await fetch("/api/admin/webhook-stats", {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+
+      if (response.status === 401) {
+        setAuthenticated(false);
+        setWebhookStats(null);
+        return;
+      }
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          payload.error || "Impossible de charger les statistiques webhook 24 h"
+        );
+      }
+
+      setWebhookStats(payload);
+    } catch (error) {
+      setWebhookStatsError(
+        error.message || "Impossible de charger les statistiques webhook 24 h"
+      );
+    } finally {
+      setWebhookStatsLoading(false);
+    }
+  };
+
   const loadGatewayStatus = async () => {
     setGatewayStatusLoading(true);
     setGatewayStatusError("");
@@ -289,6 +347,7 @@ export default function Admin() {
   const refreshAll = () => {
     loadDevices();
     loadLogs();
+    loadWebhookStats();
     loadGatewayStatus();
   };
 
@@ -421,6 +480,14 @@ export default function Admin() {
   useEffect(() => {
     if (!authenticated) return undefined;
 
+    loadWebhookStats();
+    const id = setInterval(loadWebhookStats, 60 * 1000);
+    return () => clearInterval(id);
+  }, [authenticated]);
+
+  useEffect(() => {
+    if (!authenticated) return undefined;
+
     loadGatewayStatus();
     const id = setInterval(loadGatewayStatus, 10 * 60 * 1000);
     return () => clearInterval(id);
@@ -462,6 +529,8 @@ export default function Admin() {
     setAuthenticated(false);
     setDevices([]);
     setLogs([]);
+    setWebhookStats(null);
+    setWebhookStatsError("");
     setGatewayStatus(null);
     setGatewayStatusError("");
   };
@@ -758,12 +827,153 @@ export default function Admin() {
             <div>
               <h2 className="text-lg font-bold text-gray-900">Réception webhook Milesight</h2>
               <p className="text-sm text-gray-600 mt-1">
-                Journal des 50 dernières requêtes reçues par <span className="font-mono">/api/milesight-webhook</span>.
+                Jauge des dernières 24 h, répartition par appareil et journal des 50 dernières requêtes reçues par <span className="font-mono">/api/milesight-webhook</span>.
               </p>
             </div>
             <div className="text-xs text-gray-500">
               {logsLoading ? "Actualisation…" : "Actualisation automatique : 10 s"}
             </div>
+          </div>
+
+          <div className="mb-5 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wide text-gray-500">
+                  Utilisation webhook — fenêtre glissante 24 h
+                </div>
+                <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <span className="text-3xl font-bold text-gray-900">
+                    {webhookStats?.webhook_requests ?? "—"}
+                  </span>
+                  <span className="text-sm text-gray-600">
+                    / {webhookStats?.quota_limit ?? 1000} webhooks
+                  </span>
+                  {webhookStats?.quota_used_percent !== undefined &&
+                    webhookStats?.quota_used_percent !== null && (
+                      <span className="text-sm font-semibold text-gray-700">
+                        ({webhookStats.quota_used_percent}%)
+                      </span>
+                    )}
+                </div>
+              </div>
+
+              <div className="text-sm text-gray-600 lg:text-right">
+                <div>
+                  Restants : <strong>{webhookStats?.quota_remaining ?? "—"}</strong>
+                </div>
+                <div className="text-xs text-gray-500 mt-0.5">
+                  {webhookStatsLoading
+                    ? "Calcul en cours…"
+                    : webhookStats
+                    ? String(webhookStats.event_count || 0) + " événement(s) contenu(s) dans les requêtes"
+                    : "Aucune statistique disponible"}
+                </div>
+              </div>
+            </div>
+
+            <div
+              className="mt-3 h-4 w-full overflow-hidden rounded-full bg-gray-200"
+              role="progressbar"
+              aria-label="Utilisation du quota webhook sur 24 heures"
+              aria-valuemin="0"
+              aria-valuemax={webhookStats?.quota_limit ?? 1000}
+              aria-valuenow={webhookStats?.webhook_requests ?? 0}
+            >
+              <div
+                className={"h-full rounded-full transition-all " + webhookQuotaBarClass(webhookStats?.quota_used_percent)}
+                style={{
+                  width: String(Math.min(100, Number(webhookStats?.quota_used_percent || 0))) + "%",
+                }}
+              />
+            </div>
+
+            <div className="mt-2 flex flex-wrap justify-between gap-2 text-[11px] text-gray-500">
+              <span>
+                De {formatDate(webhookStats?.from)} à {formatDate(webhookStats?.to)}
+              </span>
+              <span>
+                Estimation locale sur 24 h; le cycle exact du quota Milesight peut différer.
+              </span>
+            </div>
+
+            {webhookStatsError && (
+              <div className="mt-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {webhookStatsError}
+              </div>
+            )}
+
+            {webhookStats?.devices?.length > 0 && (
+              <div className="mt-5 overflow-x-auto">
+                <div className="mb-2 text-sm font-bold text-gray-900">
+                  Webhooks par appareil — dernières 24 h
+                </div>
+                <table className="w-full min-w-[720px] text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-xs uppercase tracking-wide text-gray-500">
+                      <th className="py-2 pr-4">Appareil</th>
+                      <th className="py-2 pr-4 text-right">Webhooks</th>
+                      <th className="py-2 pr-4 text-right">Intervalle moyen</th>
+                      <th className="py-2 pr-4 text-right">Part du total</th>
+                      <th className="py-2 text-right">Dernier reçu</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {webhookStats.devices.map((item) => {
+                      const matchingDevice = devices.find(
+                        (device) => device.device_uuid === item.device_uuid
+                      );
+                      const share =
+                        webhookStats.webhook_requests > 0
+                          ? (item.webhook_count / webhookStats.webhook_requests) * 100
+                          : 0;
+
+                      return (
+                        <tr key={item.device_uuid} className="border-b last:border-b-0">
+                          <td className="py-3 pr-4">
+                            {matchingDevice?.nickname && (
+                              <div className="font-semibold text-gray-900">
+                                {matchingDevice.nickname}
+                              </div>
+                            )}
+                            <div className="font-mono text-xs text-gray-500">
+                              {item.device_uuid}
+                            </div>
+                          </td>
+                          <td className="py-3 pr-4 text-right font-bold text-gray-900">
+                            {item.webhook_count}
+                          </td>
+                          <td className="py-3 pr-4 text-right">
+                            <span
+                              className={
+                                item.average_interval_seconds != null &&
+                                item.average_interval_seconds < 20 * 60
+                                  ? "font-bold text-red-700"
+                                  : "text-gray-700"
+                              }
+                            >
+                              {formatIntervalSeconds(item.average_interval_seconds)}
+                            </span>
+                          </td>
+                          <td className="py-3 pr-4 text-right text-gray-700">
+                            {share.toFixed(1)}%
+                          </td>
+                          <td className="py-3 text-right text-gray-600">
+                            {formatDate(item.last_received_at)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+
+                {webhookStats.unattributed_requests > 0 && (
+                  <div className="mt-2 text-xs text-gray-500">
+                    {webhookStats.unattributed_requests} webhook(s) sans DevEUI
+                    (ex. avis de service Milesight) sont inclus dans la jauge.
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {logsError && (
