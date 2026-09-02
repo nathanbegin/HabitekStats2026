@@ -1125,28 +1125,93 @@ export default function Admin() {
         )}
 
         {activeSection === "maintenance" && (
-          <section className="bg-white rounded-2xl shadow p-4 sm:p-5 mb-5 border border-red-100">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <div className="text-xs font-bold uppercase tracking-wide text-red-600 mb-1">
-                Maintenance
+          <section className="space-y-4 mb-5">
+            <div className="bg-white rounded-2xl shadow p-4 sm:p-5 border border-amber-100">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div className="max-w-3xl">
+                  <div className="text-xs font-bold uppercase tracking-wide text-amber-700 mb-1">
+                    Rétention de l'historique
+                  </div>
+                  <h2 className="text-lg font-bold text-gray-900">
+                    Conserver seulement les X dernières heures
+                  </h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Supprime uniquement les mesures plus anciennes que la durée choisie.
+                    Les mesures récentes, DevEUI, surnoms, assignations, derniers états des appareils
+                    et logs webhook sont conservés.
+                  </p>
+                </div>
+
+                <div className="w-full lg:w-auto">
+                  <label
+                    htmlFor="retention-hours"
+                    className="block text-sm font-medium text-gray-700 mb-1.5"
+                  >
+                    Heures à conserver
+                  </label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      id="retention-hours"
+                      type="number"
+                      min="1"
+                      max="8760"
+                      step="1"
+                      inputMode="numeric"
+                      value={retentionHours}
+                      onChange={(event) => setRetentionHours(event.target.value)}
+                      className="w-full sm:w-32 border rounded-xl px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={openRetentionDialog}
+                      className="shrink-0 px-4 py-2.5 rounded-xl bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700"
+                    >
+                      Nettoyer l'historique
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {[24, 48, 72, 168, 720].map((hours) => (
+                      <button
+                        key={hours}
+                        type="button"
+                        onClick={() => setRetentionHours(String(hours))}
+                        className="px-2 py-1 rounded-lg border bg-white text-xs text-gray-600 hover:bg-gray-50"
+                      >
+                        {hours === 168
+                          ? "7 jours"
+                          : hours === 720
+                          ? "30 jours"
+                          : String(hours) + " h"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
-              <h2 className="text-lg font-bold text-gray-900">Remise à zéro des statistiques</h2>
-              <p className="text-sm text-gray-600 mt-1 max-w-3xl">
-                À utiliser à la fin de la phase de test. Cette action supprime tout l'historique de température et d'humidité
-                ainsi que les dernières mesures affichées. Les DevEUI, surnoms, assignations et logs webhook sont conservés,
-                afin de réutiliser exactement la même configuration pour le déploiement réel.
-              </p>
             </div>
-            <button
-              type="button"
-              onClick={openResetDialog}
-              className="shrink-0 px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700"
-            >
-              Remettre les statistiques à zéro
-            </button>
-          </div>
-        </section>
+
+            <div className="bg-white rounded-2xl shadow p-4 sm:p-5 border border-red-100">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-wide text-red-600 mb-1">
+                    Remise à zéro complète
+                  </div>
+                  <h2 className="text-lg font-bold text-gray-900">Remise à zéro des statistiques</h2>
+                  <p className="text-sm text-gray-600 mt-1 max-w-3xl">
+                    À utiliser à la fin de la phase de test. Cette action supprime tout l'historique de température et d'humidité
+                    ainsi que les dernières mesures affichées. Les DevEUI, surnoms, assignations et logs webhook sont conservés,
+                    afin de réutiliser exactement la même configuration pour le déploiement réel.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={openResetDialog}
+                  className="shrink-0 px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700"
+                >
+                  Remettre les statistiques à zéro
+                </button>
+              </div>
+            </div>
+          </section>
         )}
 
         {activeSection === "devices" && (
@@ -1472,6 +1537,77 @@ export default function Admin() {
             </div>
           )}
         </section>
+        )}
+
+        {retentionOpen && (
+          <div
+            className="fixed inset-0 z-[10000] bg-black/50 flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="retention-title"
+          >
+            <form
+              onSubmit={applyHistoryRetention}
+              className="w-full max-w-lg bg-white rounded-2xl shadow-2xl p-6"
+            >
+              <div className="w-11 h-11 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-xl font-bold mb-4">
+                ⏱
+              </div>
+              <h2 id="retention-title" className="text-xl font-bold text-gray-900">
+                Confirmer le nettoyage de l'historique
+              </h2>
+              <p className="text-sm text-gray-600 mt-2">
+                Toutes les mesures datant de plus de{" "}
+                <strong>{retentionHours} heure(s)</strong> seront supprimées définitivement.
+                Les données plus récentes seront conservées.
+              </p>
+
+              <div className="mt-4 rounded-xl bg-amber-50 border border-amber-100 p-3 text-sm text-amber-900">
+                Les DevEUI, surnoms, assignations, derniers états des appareils et logs webhook ne seront pas supprimés.
+              </div>
+
+              <label
+                className="block text-sm font-medium text-gray-700 mt-5 mb-2"
+                htmlFor="retention-admin-password"
+              >
+                Mot de passe administrateur
+              </label>
+              <input
+                id="retention-admin-password"
+                type="password"
+                autoComplete="current-password"
+                value={retentionPassword}
+                onChange={(event) => setRetentionPassword(event.target.value)}
+                className="w-full border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                autoFocus
+                required
+              />
+
+              {retentionError && (
+                <div className="mt-3 rounded-xl bg-red-50 border border-red-100 text-red-700 px-3 py-2 text-sm">
+                  {retentionError}
+                </div>
+              )}
+
+              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-6">
+                <button
+                  type="button"
+                  onClick={closeRetentionDialog}
+                  disabled={retentionLoading}
+                  className="px-4 py-2 border rounded-xl text-sm font-semibold hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={retentionLoading || !retentionPassword}
+                  className="px-4 py-2 rounded-xl bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 disabled:opacity-50"
+                >
+                  {retentionLoading ? "Nettoyage…" : "Conserver seulement cette période"}
+                </button>
+              </div>
+            </form>
+          </div>
         )}
 
         {resetOpen && (
