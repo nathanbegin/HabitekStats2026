@@ -192,6 +192,11 @@ export default function Admin() {
   const [resetPassword, setResetPassword] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
   const [resetError, setResetError] = useState("");
+  const [retentionHours, setRetentionHours] = useState("72");
+  const [retentionOpen, setRetentionOpen] = useState(false);
+  const [retentionPassword, setRetentionPassword] = useState("");
+  const [retentionLoading, setRetentionLoading] = useState(false);
+  const [retentionError, setRetentionError] = useState("");
   const [activeSection, setActiveSection] = useState("devices");
   const [gatewayStatus, setGatewayStatus] = useState(null);
   const [gatewayStatusLoading, setGatewayStatusLoading] = useState(false);
@@ -607,6 +612,82 @@ export default function Admin() {
     setMessage("Assignation enregistrée.");
   };
 
+  const openRetentionDialog = () => {
+    const hours = Number(retentionHours);
+    if (!Number.isFinite(hours) || hours < 1 || hours > 8760) {
+      setMessage("Entre une durée comprise entre 1 et 8760 heures.");
+      return;
+    }
+
+    setMessage("");
+    setRetentionPassword("");
+    setRetentionError("");
+    setRetentionOpen(true);
+  };
+
+  const closeRetentionDialog = () => {
+    if (retentionLoading) return;
+    setRetentionOpen(false);
+    setRetentionPassword("");
+    setRetentionError("");
+  };
+
+  const applyHistoryRetention = async (event) => {
+    event.preventDefault();
+    const hours = Number(retentionHours);
+
+    if (!Number.isFinite(hours) || hours < 1 || hours > 8760) {
+      setRetentionError("Le nombre d'heures doit être compris entre 1 et 8760.");
+      return;
+    }
+
+    setRetentionLoading(true);
+    setRetentionError("");
+
+    try {
+      const response = await fetch("/api/admin/reset-stats", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          action: "keep_recent_hours",
+          keep_hours: hours,
+          password: retentionPassword,
+          confirmation: "KEEP_RECENT_HOURS",
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+
+      if (response.status === 401) {
+        setRetentionError("Mot de passe administrateur invalide.");
+        return;
+      }
+
+      if (!response.ok) {
+        setRetentionError(
+          payload.error || "Le nettoyage de l'historique a échoué."
+        );
+        return;
+      }
+
+      setRetentionOpen(false);
+      setRetentionPassword("");
+      setMessage(
+        "Historique nettoyé : " +
+          String(payload.deleted_measurements || 0) +
+          " mesure(s) supprimée(s). Les " +
+          String(payload.keep_hours || hours) +
+          " dernières heures ont été conservées."
+      );
+      await loadDevices();
+    } catch {
+      setRetentionError("Impossible de communiquer avec le serveur.");
+    } finally {
+      setRetentionLoading(false);
+    }
+  };
+
   const openResetDialog = () => {
     setResetPassword("");
     setResetError("");
@@ -813,7 +894,7 @@ export default function Admin() {
               <span>
                 <span className="block text-sm font-bold">Maintenance</span>
                 <span className={`block text-xs mt-0.5 ${activeSection === "maintenance" ? "text-red-100" : "text-gray-500"}`}>
-                  Remise à zéro
+                  Historique et remise à zéro
                 </span>
               </span>
               <span className="text-lg" aria-hidden="true">⚙</span>
