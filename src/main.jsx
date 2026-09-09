@@ -5,6 +5,7 @@ import App from './App.jsx';
 import Admin from './Admin.jsx';
 import './comparisonEnhancements.js';
 import './currentConditionsBranding.js';
+import './currentConditionsSubtitleStable.js';
 import './index.css';
 
 const isAdminRoute = window.location.pathname === '/admin' ||
