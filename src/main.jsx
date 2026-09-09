@@ -3,6 +3,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import Admin from './Admin.jsx';
+import './currentConditionsPrepaintGuard.js';
 import './comparisonEnhancements.js';
 import './currentConditionsBranding.js';
 import './currentConditionsSubtitleStable.js';
