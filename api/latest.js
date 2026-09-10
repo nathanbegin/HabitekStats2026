@@ -76,7 +76,17 @@ function parsePublicMcTavishPage(html) {
     if (!timeMatch || !currentDate || cells.length < 6) continue;
 
     const temperature = firstNumber(cells[2]);
-    const humidity = firstNumber(cells[5]);
+
+    // Relative humidity is the fourth column from the end of the official
+    // Past 24 Hour Conditions table: RH, dew point, pressure, visibility.
+    // Reading cells[5] was brittle because ECCC can render an extra wind cell,
+    // which caused the wind speed (for example 2) to be mistaken for 2% RH.
+    const humidityCell = cells.length >= 7 ? cells[cells.length - 4] : cells[5];
+    const parsedHumidity = firstNumber(humidityCell);
+    const humidity = parsedHumidity != null && parsedHumidity >= 0 && parsedHumidity <= 100
+      ? parsedHumidity
+      : null;
+
     if (temperature == null && humidity == null) continue;
 
     const y = String(currentDate.year).padStart(4, "0");
