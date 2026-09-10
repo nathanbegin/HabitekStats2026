@@ -1,39 +1,40 @@
 // Compare the HabiTEK outdoor sensor with the nearby ECCC McTavish station.
-// Data is proxied through the existing /api/latest route so this does not add a
-// Vercel Serverless Function.
+// The comparison is rendered directly inside the outdoor card and is restored
+// automatically if another enhancement layer rebuilds that card.
 
 const BLOCK_ID = 'habitek-eccc-comparison';
 const STYLE_ID = 'habitek-eccc-comparison-style';
 const REFRESH_MS = 5 * 60 * 1000;
+const RENDER_MS = 1200;
 const STALE_MS = 90 * 60 * 1000;
 
 let externalWeather = null;
-let lastFetchAt = 0;
+let weatherState = 'loading';
 let fetchPromise = null;
 
 const copy = {
   fr: {
-    title: 'Référence externe',
+    title: 'Comparatif météo externe',
     source: 'ECCC · McTavish',
     temperature: 'Température',
     humidity: 'Humidité',
-    sensor: 'Capteur HabiTEK',
+    sensor: 'HabiTEK',
     reference: 'McTavish',
-    difference: 'Écart',
     updated: 'Observation ECCC',
     stale: 'Donnée externe ancienne',
+    loading: 'Chargement de la référence ECCC…',
     unavailable: 'Référence ECCC temporairement indisponible',
   },
   en: {
-    title: 'External reference',
+    title: 'External weather comparison',
     source: 'ECCC · McTavish',
     temperature: 'Temperature',
     humidity: 'Humidity',
-    sensor: 'HabiTEK sensor',
+    sensor: 'HabiTEK',
     reference: 'McTavish',
-    difference: 'Difference',
     updated: 'ECCC observation',
     stale: 'External data is old',
+    loading: 'Loading ECCC reference…',
     unavailable: 'ECCC reference temporarily unavailable',
   },
 };
@@ -45,7 +46,7 @@ function installStyles() {
   style.id = STYLE_ID;
   style.textContent = `
     #${BLOCK_ID} {
-      margin-top: 0.8rem;
+      margin-top: 0.85rem;
       padding-top: 0.75rem;
       border-top: 1px solid rgba(255,255,255,0.10);
     }
@@ -60,7 +61,7 @@ function installStyles() {
 
     #${BLOCK_ID} .habitek-eccc-title {
       color: #f4f7fb;
-      font-size: 0.68rem;
+      font-size: 0.66rem;
       font-weight: 800;
       letter-spacing: 0.045em;
       text-transform: uppercase;
@@ -69,13 +70,12 @@ function installStyles() {
     #${BLOCK_ID} .habitek-eccc-source {
       display: inline-flex;
       align-items: center;
-      gap: 0.3rem;
       padding: 0.18rem 0.42rem;
       border: 1px solid rgba(239,125,34,0.38);
       border-radius: 999px;
       color: #ffe3cc;
       background: rgba(239,125,34,0.10);
-      font-size: 0.6rem;
+      font-size: 0.59rem;
       font-weight: 750;
       text-decoration: none;
       white-space: nowrap;
@@ -89,38 +89,41 @@ function installStyles() {
 
     #${BLOCK_ID} .habitek-eccc-metric {
       min-width: 0;
-      padding: 0.52rem 0.58rem;
-      border: 1px solid rgba(255,255,255,0.075);
+      padding: 0.55rem 0.58rem;
+      border: 1px solid rgba(255,255,255,0.08);
       border-radius: 0.68rem;
-      background: rgba(15,23,42,0.24);
+      background: rgba(15,23,42,0.27);
     }
 
     #${BLOCK_ID} .habitek-eccc-metric-label {
-      margin-bottom: 0.3rem;
+      margin-bottom: 0.28rem;
       color: #aeb9c8;
-      font-size: 0.61rem;
+      font-size: 0.6rem;
       font-weight: 700;
     }
 
     #${BLOCK_ID} .habitek-eccc-values {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      align-items: end;
-      gap: 0.35rem;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.4rem;
+      min-width: 0;
     }
 
     #${BLOCK_ID} .habitek-eccc-reference-value {
       color: #ffffff;
-      font-size: 0.98rem;
+      font-size: 1.05rem;
       line-height: 1.05;
       font-weight: 850;
+      white-space: nowrap;
     }
 
     #${BLOCK_ID} .habitek-eccc-delta {
       color: #f7c24b;
-      font-size: 0.65rem;
+      font-size: 0.61rem;
       line-height: 1.1;
       font-weight: 800;
+      text-align: right;
       white-space: nowrap;
     }
 
@@ -131,7 +134,7 @@ function installStyles() {
       gap: 0.5rem;
       margin-top: 0.48rem;
       color: #8f9bad;
-      font-size: 0.57rem;
+      font-size: 0.56rem;
       line-height: 1.25;
     }
 
@@ -140,12 +143,14 @@ function installStyles() {
       font-weight: 800;
     }
 
-    #${BLOCK_ID} .habitek-eccc-unavailable {
-      padding: 0.5rem 0.58rem;
+    #${BLOCK_ID} .habitek-eccc-state {
+      padding: 0.52rem 0.58rem;
+      border: 1px solid rgba(255,255,255,0.07);
       border-radius: 0.65rem;
       color: #aeb9c8;
-      background: rgba(15,23,42,0.22);
-      font-size: 0.64rem;
+      background: rgba(15,23,42,0.24);
+      font-size: 0.63rem;
+      line-height: 1.3;
     }
 
     @media (max-width: 640px) {
@@ -164,6 +169,11 @@ function language() {
     return value === 'conditions actuelles' || value === 'current conditions';
   });
   return heading?.textContent?.trim().toLowerCase() === 'current conditions' ? 'en' : 'fr';
+}
+
+function findOutdoorCard() {
+  return document.getElementById('habitek-current-outdoor-card') ||
+    document.querySelector(".habitek-current-card[data-cabin='outdoor']");
 }
 
 function parseNumber(value) {
@@ -199,15 +209,7 @@ function formatObservationTime(value, lang) {
   }).format(date);
 }
 
-function render() {
-  const card = document.getElementById('habitek-current-outdoor-card');
-  if (!card) return;
-
-  installStyles();
-  const lang = language();
-  const t = copy[lang];
-  const local = outdoorValues(card);
-
+function ensureBlock(card) {
   let block = document.getElementById(BLOCK_ID);
   if (!block) {
     block = document.createElement('div');
@@ -216,9 +218,38 @@ function render() {
   } else if (block.parentElement !== card) {
     card.appendChild(block);
   }
+  return block;
+}
+
+function render() {
+  const card = findOutdoorCard();
+  if (!card) return;
+
+  installStyles();
+  const lang = language();
+  const t = copy[lang];
+  const local = outdoorValues(card);
+  const block = ensureBlock(card);
+
+  if (weatherState === 'loading') {
+    block.innerHTML = `
+      <div class="habitek-eccc-header">
+        <div class="habitek-eccc-title">${t.title}</div>
+        <span class="habitek-eccc-source">${t.source}</span>
+      </div>
+      <div class="habitek-eccc-state">${t.loading}</div>
+    `;
+    return;
+  }
 
   if (!externalWeather) {
-    block.innerHTML = `<div class="habitek-eccc-unavailable">${t.unavailable}</div>`;
+    block.innerHTML = `
+      <div class="habitek-eccc-header">
+        <div class="habitek-eccc-title">${t.title}</div>
+        <span class="habitek-eccc-source">${t.source}</span>
+      </div>
+      <div class="habitek-eccc-state">${t.unavailable}</div>
+    `;
     return;
   }
 
@@ -270,24 +301,24 @@ function render() {
   `;
 }
 
-async function refreshExternalWeather(force = false) {
+async function refreshExternalWeather() {
   if (fetchPromise) return fetchPromise;
-  if (!force && externalWeather && Date.now() - lastFetchAt < REFRESH_MS) {
-    render();
-    return externalWeather;
-  }
+  weatherState = 'loading';
+  render();
 
-  fetchPromise = fetch('/api/latest', { cache: 'no-store' })
+  fetchPromise = fetch(`/api/latest?external_weather=1&_=${Date.now()}`, { cache: 'no-store' })
     .then(async (response) => {
+      const payload = await response.json().catch(() => ({}));
       if (!response.ok && response.status !== 404) throw new Error(`HTTP ${response.status}`);
-      const payload = await response.json();
       externalWeather = payload?.external_weather || null;
-      lastFetchAt = Date.now();
+      weatherState = externalWeather ? 'ready' : 'unavailable';
       render();
       return externalWeather;
     })
     .catch((error) => {
       console.warn('[HabiTEK] external weather comparison unavailable', error);
+      externalWeather = null;
+      weatherState = 'unavailable';
       render();
       return null;
     })
@@ -302,19 +333,11 @@ function install() {
   if (window.location.pathname.startsWith('/admin')) return;
   installStyles();
 
-  const observer = new MutationObserver(() => {
-    window.clearTimeout(observer._timer);
-    observer._timer = window.setTimeout(render, 70);
-  });
-
   const start = () => {
-    refreshExternalWeather(true);
-    observer.observe(document.getElementById('root') || document.body, {
-      childList: true,
-      subtree: true,
-      characterData: true,
-    });
-    window.setInterval(() => refreshExternalWeather(true), REFRESH_MS);
+    render();
+    refreshExternalWeather();
+    window.setInterval(render, RENDER_MS);
+    window.setInterval(refreshExternalWeather, REFRESH_MS);
   };
 
   if (document.readyState === 'loading') {
