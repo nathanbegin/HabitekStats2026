@@ -24,6 +24,9 @@ const copy = {
     stale: 'Donnée externe ancienne',
     loading: 'Chargement de la référence ECCC…',
     unavailable: 'Référence ECCC temporairement indisponible',
+    infoLabel: 'Pourquoi les données sont-elles différentes ?',
+    infoTitle: 'Pourquoi y a-t-il une différence entre les données externes et les données récoltées par les capteurs sur le site ?',
+    infoBody: "L’explication se résume principalement à l’emplacement du capteur extérieur. Il se trouve dans un endroit où les conditions de température peuvent être différentes, notamment parce qu’il est plus près des rejets d’eau provenant de la fonte de la glace. C’est pourquoi nous avons remarqué une augmentation de l’humidité mesurée par le capteur extérieur en comparaison avec les données météo d’Environnement et Changement climatique Canada.",
   },
   en: {
     title: 'External weather comparison',
@@ -36,6 +39,9 @@ const copy = {
     stale: 'External data is old',
     loading: 'Loading ECCC reference…',
     unavailable: 'ECCC reference temporarily unavailable',
+    infoLabel: 'Why are the measurements different?',
+    infoTitle: 'Why is there a difference between the external reference and the sensors on site?',
+    infoBody: 'The difference is mainly explained by the location of the outdoor sensor. It is installed in an area where local temperature conditions can differ, particularly because it is closer to water discharge from melting ice. This is why we have observed higher humidity at the outdoor sensor compared with the weather data published by Environment and Climate Change Canada.',
   },
 };
 
@@ -59,12 +65,90 @@ function installStyles() {
       margin-bottom: 0.55rem;
     }
 
+    #${BLOCK_ID} .habitek-eccc-title-wrap {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.38rem;
+      min-width: 0;
+    }
+
     #${BLOCK_ID} .habitek-eccc-title {
       color: #f4f7fb;
       font-size: 0.66rem;
       font-weight: 800;
       letter-spacing: 0.045em;
       text-transform: uppercase;
+    }
+
+    #${BLOCK_ID} .habitek-eccc-info {
+      position: relative;
+      flex: 0 0 auto;
+    }
+
+    #${BLOCK_ID} .habitek-eccc-info-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.05rem;
+      height: 1.05rem;
+      padding: 0;
+      border: 1px solid rgba(255,255,255,0.42);
+      border-radius: 999px;
+      color: #f4f7fb;
+      background: rgba(255,255,255,0.06);
+      font: 800 0.67rem/1 Arial, sans-serif;
+      cursor: help;
+      appearance: none;
+    }
+
+    #${BLOCK_ID} .habitek-eccc-info-button:hover,
+    #${BLOCK_ID} .habitek-eccc-info-button:focus-visible {
+      border-color: #f7c24b;
+      color: #f7c24b;
+      outline: none;
+      background: rgba(247,194,75,0.08);
+    }
+
+    #${BLOCK_ID} .habitek-eccc-info-popover {
+      position: absolute;
+      z-index: 30;
+      left: 0;
+      top: calc(100% + 0.48rem);
+      width: min(23rem, calc(100vw - 3rem));
+      padding: 0.72rem 0.78rem;
+      border: 1px solid rgba(247,194,75,0.28);
+      border-radius: 0.7rem;
+      color: #dce5f0;
+      background: #151d2a;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.34);
+      font-size: 0.66rem;
+      line-height: 1.45;
+      text-transform: none;
+      letter-spacing: normal;
+      font-weight: 400;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-4px);
+      transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
+      pointer-events: none;
+    }
+
+    #${BLOCK_ID} .habitek-eccc-info-popover strong {
+      display: block;
+      margin-bottom: 0.38rem;
+      color: #ffffff;
+      font-size: 0.68rem;
+      line-height: 1.35;
+      font-weight: 800;
+    }
+
+    #${BLOCK_ID} .habitek-eccc-info:hover .habitek-eccc-info-popover,
+    #${BLOCK_ID} .habitek-eccc-info:focus-within .habitek-eccc-info-popover {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+      pointer-events: auto;
     }
 
     #${BLOCK_ID} .habitek-eccc-source {
@@ -157,6 +241,11 @@ function installStyles() {
       #${BLOCK_ID} .habitek-eccc-grid {
         grid-template-columns: 1fr;
       }
+
+      #${BLOCK_ID} .habitek-eccc-info-popover {
+        left: -0.25rem;
+        width: min(20rem, calc(100vw - 2.5rem));
+      }
     }
   `;
 
@@ -221,6 +310,36 @@ function ensureBlock(card) {
   return block;
 }
 
+function infoMarkup(t) {
+  return `
+    <span class="habitek-eccc-info">
+      <button class="habitek-eccc-info-button" type="button" aria-label="${t.infoLabel}" aria-describedby="habitek-eccc-info-text">i</button>
+      <span class="habitek-eccc-info-popover" id="habitek-eccc-info-text" role="tooltip">
+        <strong>${t.infoTitle}</strong>
+        <span>${t.infoBody}</span>
+      </span>
+    </span>
+  `;
+}
+
+function headerMarkup(t, sourceMarkup) {
+  return `
+    <div class="habitek-eccc-header">
+      <div class="habitek-eccc-title-wrap">
+        <div class="habitek-eccc-title">${t.title}</div>
+        ${infoMarkup(t)}
+      </div>
+      ${sourceMarkup}
+    </div>
+  `;
+}
+
+function setBlockHtml(block, signature, html) {
+  if (block.dataset.renderSignature === signature) return;
+  block.dataset.renderSignature = signature;
+  block.innerHTML = html;
+}
+
 function render() {
   const card = findOutdoorCard();
   if (!card) return;
@@ -232,24 +351,20 @@ function render() {
   const block = ensureBlock(card);
 
   if (weatherState === 'loading') {
-    block.innerHTML = `
-      <div class="habitek-eccc-header">
-        <div class="habitek-eccc-title">${t.title}</div>
-        <span class="habitek-eccc-source">${t.source}</span>
-      </div>
-      <div class="habitek-eccc-state">${t.loading}</div>
-    `;
+    setBlockHtml(
+      block,
+      `${lang}|loading`,
+      `${headerMarkup(t, `<span class="habitek-eccc-source">${t.source}</span>`)}<div class="habitek-eccc-state">${t.loading}</div>`
+    );
     return;
   }
 
   if (!externalWeather) {
-    block.innerHTML = `
-      <div class="habitek-eccc-header">
-        <div class="habitek-eccc-title">${t.title}</div>
-        <span class="habitek-eccc-source">${t.source}</span>
-      </div>
-      <div class="habitek-eccc-state">${t.unavailable}</div>
-    `;
+    setBlockHtml(
+      block,
+      `${lang}|unavailable`,
+      `${headerMarkup(t, `<span class="habitek-eccc-source">${t.source}</span>`)}<div class="habitek-eccc-state">${t.unavailable}</div>`
+    );
     return;
   }
 
@@ -271,13 +386,22 @@ function render() {
     ? 'https://weather.gc.ca/past_conditions/index_f.html?station=wta'
     : 'https://weather.gc.ca/past_conditions/index_e.html?station=wta';
 
-  block.innerHTML = `
-    <div class="habitek-eccc-header">
-      <div class="habitek-eccc-title">${t.title}</div>
+  const signature = [
+    lang,
+    referenceTemp,
+    referenceHumidity,
+    local.temperature,
+    local.humidity,
+    externalWeather.observed_at || '',
+    stale ? 'stale' : 'fresh',
+  ].join('|');
+
+  setBlockHtml(block, signature, `
+    ${headerMarkup(t, `
       <a class="habitek-eccc-source" href="${stationLink}" target="_blank" rel="noopener noreferrer">
         ${t.source}
       </a>
-    </div>
+    `)}
     <div class="habitek-eccc-grid">
       <div class="habitek-eccc-metric">
         <div class="habitek-eccc-metric-label">🌡 ${t.temperature} · ${t.reference}</div>
@@ -298,7 +422,7 @@ function render() {
       <span>${observedLabel ? `${t.updated} : ${observedLabel}` : t.updated}</span>
       ${stale ? `<span class="habitek-eccc-stale">⚠ ${t.stale}</span>` : ''}
     </div>
-  `;
+  `);
 }
 
 async function refreshExternalWeather() {
