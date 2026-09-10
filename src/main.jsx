@@ -7,6 +7,7 @@ import './currentConditionsPrepaintGuard.js';
 import './comparisonEnhancements.js';
 import './currentConditionsBranding.js';
 import './currentConditionsSubtitleStable.js';
+import './externalWeatherComparison.js';
 import './index.css';
 
 const isAdminRoute = window.location.pathname === '/admin' ||
