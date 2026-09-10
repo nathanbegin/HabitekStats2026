@@ -1,13 +1,46 @@
 import { getSupabaseAdmin } from "../lib/supabaseAdmin.js";
 
 const ECCC_URL =
-  "https://api.weather.gc.ca/collections/swob-realtime/items?bbox=-73.585,45.495,-73.575,45.505&limit=1&f=json";
+  "https://api.weather.gc.ca/collections/swob-realtime/items?f=json&url=WTA&sortby=-date_tm-value&limit=1&properties=date_tm-value,obs_date_tm,processed_date_tm,stn_nam-value,stn_id-value,air_temp,rel_hum";
+const ECCC_FALLBACK_URL =
+  "https://api.weather.gc.ca/collections/swob-realtime/items?f=json&bbox=-73.61,45.47,-73.54,45.53&sortby=-date_tm-value&limit=50";
 const ECCC_CACHE_MS = 5 * 60 * 1000;
 let ecccCache = null;
 
 function finiteNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
+}
+
+async function fetchJson(url, signal) {
+  const response = await fetch(url, {
+    headers: {
+      Accept: "application/geo+json, application/json",
+      "User-Agent": "HabiTEK-Stats/2026 (stats.habitek.ca)",
+    },
+    signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(`ECCC responded ${response.status}`);
+  }
+
+  return response.json();
+}
+
+function chooseMcTavishFeature(payload) {
+  const features = Array.isArray(payload?.features) ? payload.features : [];
+  if (!features.length) return null;
+
+  return (
+    features.find((feature) => {
+      const properties = feature?.properties || {};
+      const stationId = String(properties["stn_id-value"] || "").toUpperCase();
+      const stationName = String(properties["stn_nam-value"] || "").toLowerCase();
+      const urlCode = String(properties.url || "").toUpperCase();
+      return stationId === "WTA" || urlCode === "WTA" || stationName.includes("mctavish");
+    }) || features[0]
+  );
 }
 
 async function loadExternalWeather() {
@@ -17,25 +50,18 @@ async function loadExternalWeather() {
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 4500);
+  const timeout = setTimeout(() => controller.abort(), 6500);
 
   try {
-    const response = await fetch(ECCC_URL, {
-      headers: {
-        Accept: "application/geo+json, application/json",
-        "User-Agent": "HabiTEK-Stats/2026 (stats.habitek.ca)",
-      },
-      signal: controller.signal,
-    });
+    let payload = await fetchJson(ECCC_URL, controller.signal);
+    let feature = chooseMcTavishFeature(payload);
 
-    if (!response.ok) {
-      throw new Error(`ECCC responded ${response.status}`);
+    if (!feature) {
+      payload = await fetchJson(ECCC_FALLBACK_URL, controller.signal);
+      feature = chooseMcTavishFeature(payload);
     }
 
-    const payload = await response.json();
-    const feature = Array.isArray(payload?.features) ? payload.features[0] : null;
     const properties = feature?.properties || {};
-
     const temperature = finiteNumber(properties.air_temp);
     const humidity = finiteNumber(properties.rel_hum);
     const observedAt =
@@ -55,8 +81,8 @@ async function loadExternalWeather() {
       temperature,
       humidity,
       observed_at: observedAt,
-      latitude: 45.5,
-      longitude: -73.58,
+      latitude: feature?.geometry?.coordinates?.[1] ?? 45.5,
+      longitude: feature?.geometry?.coordinates?.[0] ?? -73.58,
     };
 
     ecccCache = { cachedAt: now, value };
