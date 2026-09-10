@@ -11,3 +11,12 @@
   width: 24px;
   height: 24px;
 }
+
+/* Keep indoor humidity values visually consistent with the outdoor metrics. */
+#habitek-current-conditions .habitek-current-card[data-cabin] .habitek-primary-humidity > span:first-child {
+  color: #ffffff !important;
+  font-size: clamp(1.35rem, 2.2vw, 1.7rem) !important;
+  line-height: 1.05 !important;
+  font-weight: 850 !important;
+  letter-spacing: -0.025em !important;
+}
