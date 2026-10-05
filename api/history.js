@@ -2,6 +2,9 @@ import { getSupabaseAdmin } from "../lib/supabaseAdmin.js";
 
 
 const CHALLENGE_PAIR_TOLERANCE_MS = 15 * 60 * 1000;
+// Requested final analysis window in Montréal local time (EDT in September 2026).
+const CHALLENGE_ANALYSIS_START = new Date("2026-09-03T00:00:00-04:00");
+const CHALLENGE_ANALYSIS_END = new Date("2026-09-30T23:59:59.999-04:00");
 
 const asFiniteNumber = (value) => {
   const number = Number(value);
@@ -30,44 +33,9 @@ async function getChallengeSummary(supabase) {
     };
   }
 
-  const loadBoundary = async (deviceUuid, ascending) => {
-    const { data, error } = await supabase
-      .from("device_data")
-      .select("timestamp")
-      .eq("device_uuid", deviceUuid)
-      .eq("record_type", "sensor")
-      .order("timestamp", { ascending })
-      .limit(1)
-      .maybeSingle();
-
-    if (error) throw error;
-    return data?.timestamp ? new Date(data.timestamp) : null;
-  };
-
-  const [codeFirst, codeLast, passiveFirst, passiveLast] = await Promise.all([
-    loadBoundary(codeDevice.device_uuid, true),
-    loadBoundary(codeDevice.device_uuid, false),
-    loadBoundary(passiveDevice.device_uuid, true),
-    loadBoundary(passiveDevice.device_uuid, false),
-  ]);
-
-  if (![codeFirst, codeLast, passiveFirst, passiveLast].every((date) => date && !Number.isNaN(date.getTime()))) {
-    return {
-      available: false,
-      reason: "Not enough historical cabin data",
-    };
-  }
-
-  // Analyze only the period where both indoor sensors were simultaneously active.
-  const overlapStart = new Date(Math.max(codeFirst.getTime(), passiveFirst.getTime()));
-  const overlapEnd = new Date(Math.min(codeLast.getTime(), passiveLast.getTime()));
-
-  if (overlapStart >= overlapEnd) {
-    return {
-      available: false,
-      reason: "No common measurement period",
-    };
-  }
+  // Use the fixed challenge period requested for the final recap.
+  const overlapStart = CHALLENGE_ANALYSIS_START;
+  const overlapEnd = CHALLENGE_ANALYSIS_END;
 
   const rows = [];
   const pageSize = 1000;
@@ -153,8 +121,10 @@ async function getChallengeSummary(supabase) {
 
   return {
     available: true,
-    challenge_start: new Date(pairs[0].time).toISOString(),
-    challenge_end: new Date(pairs[pairs.length - 1].time).toISOString(),
+    challenge_start: CHALLENGE_ANALYSIS_START.toISOString(),
+    challenge_end: CHALLENGE_ANALYSIS_END.toISOString(),
+    first_paired_at: new Date(pairs[0].time).toISOString(),
+    last_paired_at: new Date(pairs[pairs.length - 1].time).toISOString(),
     paired_samples: pairs.length,
     code_average_c: Number(codeAverage.toFixed(2)),
     passive_average_c: Number(passiveAverage.toFixed(2)),
