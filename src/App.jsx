@@ -13,6 +13,16 @@ const translations = {
     event: "ICE‑BOX Challenge Montréal 2026",
     appTitle: "Statistiques des cabanes HabiTEK",
     currentConditions: "Conditions Actuelles",
+    challengeEndedTitle: "Le ICE‑BOX Challenge Montréal 2026 est terminé",
+    challengeEndedBadge: "Challenge terminé",
+    challengeEndedIntro: "Merci d’avoir suivi l’expérience. Voici le bilan des températures intérieures mesurées simultanément dans les deux cabanes.",
+    challengeCodeAverage: "Moyenne · Cabane Code",
+    challengePassiveAverage: "Moyenne · PassiveHouse",
+    challengeAverageGap: "Écart moyen",
+    challengeMaxGap: "Écart maximal",
+    challengePeriod: "Période analysée",
+    challengeComparableSamples: "mesures comparables",
+    challengeLoading: "Analyse des données finales en cours…",
     loadingStats: "Chargement des dernières statistiques...",
     tempInt: "Temp. Int.",
     humInt: "Hum. Int.",
@@ -70,6 +80,16 @@ const translations = {
     event: "ICE‑BOX Challenge Montréal 2026",
     appTitle: "HabiTEK Cabin Statistics",
     currentConditions: "Current Conditions",
+    challengeEndedTitle: "The ICE‑BOX Challenge Montréal 2026 is over",
+    challengeEndedBadge: "Challenge complete",
+    challengeEndedIntro: "Thank you for following the experiment. Here is the indoor-temperature summary measured simultaneously in both cabins.",
+    challengeCodeAverage: "Average · Code cabin",
+    challengePassiveAverage: "Average · PassiveHouse",
+    challengeAverageGap: "Average gap",
+    challengeMaxGap: "Maximum gap",
+    challengePeriod: "Analyzed period",
+    challengeComparableSamples: "comparable measurements",
+    challengeLoading: "Analyzing the final data…",
     loadingStats: "Loading latest statistics...",
     tempInt: "Indoor Temp.",
     humInt: "Indoor Hum.",
@@ -257,6 +277,8 @@ function AppContent() {
   const [loadingLatestStats, setLoadingLatestStats] = useState(true); // Loading state for latest stats panel
   const [hottestDayStats, setHottestDayStats] = useState(null); // Tracks the hottest day and per-building summary
   const [extremeDays, setExtremeDays] = useState({ hottest: [], coldest: [] }); // Tracks 5 hottest/coldest days
+  const [challengeSummary, setChallengeSummary] = useState(null);
+  const [challengeSummaryLoading, setChallengeSummaryLoading] = useState(true);
 
   useEffect(() => {
     const handleResize = () => {
@@ -264,6 +286,31 @@ function AppContent() {
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Analyze the final challenge period directly from Supabase through the existing history API.
+  useEffect(() => {
+    let active = true;
+
+    const loadChallengeSummary = async () => {
+      try {
+        const response = await fetch('/api/history?challenge_summary=1', { cache: 'no-store' });
+        if (!response.ok) throw new Error(`Challenge summary API: ${response.status}`);
+        const summary = await response.json();
+        if (active) setChallengeSummary(summary?.available ? summary : null);
+      } catch (error) {
+        console.error('[challenge summary]', error);
+        if (active) setChallengeSummary(null);
+      } finally {
+        if (active) setChallengeSummaryLoading(false);
+      }
+    };
+
+    loadChallengeSummary();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   // Load DevEUI assignments created in the admin console.
@@ -1308,8 +1355,92 @@ const fetchStats = async (buildingName, timeWindow) => { // Add rangeHours as a 
     }
   };
 
+  const challengeAverageDelta = Number(challengeSummary?.average_delta_c);
+  const challengeMaxDelta = Number(challengeSummary?.max_delta_code_minus_passive_c);
+
+  const challengeAverageDifferenceText = Number.isFinite(challengeAverageDelta)
+    ? (language === 'fr'
+      ? (challengeAverageDelta >= 0
+        ? `La PassiveHouse a été en moyenne ${Math.abs(challengeAverageDelta).toFixed(1)} °C plus froide que la cabane Code.`
+        : `La cabane Code a été en moyenne ${Math.abs(challengeAverageDelta).toFixed(1)} °C plus froide que la PassiveHouse.`)
+      : (challengeAverageDelta >= 0
+        ? `PassiveHouse averaged ${Math.abs(challengeAverageDelta).toFixed(1)} °C colder than the Code cabin.`
+        : `The Code cabin averaged ${Math.abs(challengeAverageDelta).toFixed(1)} °C colder than PassiveHouse.`))
+    : null;
+
+  const challengeMaxDifferenceText = Number.isFinite(challengeMaxDelta)
+    ? (challengeMaxDelta >= 0
+      ? (language === 'fr' ? 'PassiveHouse plus froide' : 'PassiveHouse colder')
+      : (language === 'fr' ? 'Code plus froide' : 'Code colder'))
+    : '';
+
+  const challengePeriodLabel = challengeSummary?.challenge_start && challengeSummary?.challenge_end
+    ? `${formatBrowserDateTime(challengeSummary.challenge_start, language, { dateStyle: 'medium' })} – ${formatBrowserDateTime(challengeSummary.challenge_end, language, { dateStyle: 'medium' })}`
+    : null;
+
   return (
     <div className="p-4 max-w-6xl mx-auto">
+      <section
+        data-challenge-ended-banner
+        className="mb-6 overflow-hidden rounded-2xl border border-red-900/20 shadow-lg text-white"
+        style={{ background: 'linear-gradient(115deg, #721018 0%, #a5121e 48%, #d45b1f 100%)' }}
+      >
+        <div className="p-5 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div>
+              <div className="text-xs font-black tracking-[0.12em] uppercase text-amber-200">🏁 ICE‑BOX Challenge Montréal 2026</div>
+              <h2 className="mt-1 text-xl sm:text-2xl font-black">{t('challengeEndedTitle')}</h2>
+              <p className="mt-2 max-w-3xl text-sm sm:text-base text-red-50/90">{t('challengeEndedIntro')}</p>
+            </div>
+            <span className="self-start rounded-full border border-white/25 bg-white/10 px-3 py-1 text-xs font-bold whitespace-nowrap">
+              ✓ {t('challengeEndedBadge')}
+            </span>
+          </div>
+
+          {challengeSummaryLoading ? (
+            <div className="mt-4 rounded-xl bg-black/10 px-4 py-3 text-sm text-red-50/85">{t('challengeLoading')}</div>
+          ) : challengeSummary ? (
+            <>
+              <div className="mt-5 grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+                <div className="rounded-xl border border-white/15 bg-black/10 p-3">
+                  <div className="text-[11px] uppercase tracking-wide text-red-100/75">{t('challengeCodeAverage')}</div>
+                  <div className="mt-1 text-xl font-black">{Number(challengeSummary.code_average_c).toFixed(1)} °C</div>
+                </div>
+                <div className="rounded-xl border border-white/15 bg-black/10 p-3">
+                  <div className="text-[11px] uppercase tracking-wide text-red-100/75">{t('challengePassiveAverage')}</div>
+                  <div className="mt-1 text-xl font-black">{Number(challengeSummary.passive_average_c).toFixed(1)} °C</div>
+                </div>
+                <div className="rounded-xl border border-amber-200/25 bg-amber-300/10 p-3">
+                  <div className="text-[11px] uppercase tracking-wide text-amber-100/80">{t('challengeAverageGap')}</div>
+                  <div className="mt-1 text-xl font-black">{Math.abs(challengeAverageDelta).toFixed(1)} °C</div>
+                </div>
+                <div className="rounded-xl border border-amber-200/25 bg-amber-300/10 p-3">
+                  <div className="text-[11px] uppercase tracking-wide text-amber-100/80">{t('challengeMaxGap')}</div>
+                  <div className="mt-1 text-xl font-black">{Math.abs(challengeMaxDelta).toFixed(1)} °C</div>
+                  <div className="mt-0.5 text-[10px] text-amber-50/70">{challengeMaxDifferenceText}</div>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-xl border border-white/10 bg-black/10 px-4 py-3 text-sm text-red-50/95">
+                <strong>{challengeAverageDifferenceText}</strong>
+                {Number.isFinite(Number(challengeSummary.passive_colder_percent)) && (
+                  <span className="ml-1.5">
+                    {language === 'fr'
+                      ? `La PassiveHouse était plus froide dans ${Number(challengeSummary.passive_colder_percent).toFixed(0)} % des mesures comparables.`
+                      : `PassiveHouse was colder in ${Number(challengeSummary.passive_colder_percent).toFixed(0)}% of comparable measurements.`}
+                  </span>
+                )}
+              </div>
+
+              <div className="mt-3 text-[11px] text-red-100/70">
+                {challengePeriodLabel && <span>{t('challengePeriod')} : {challengePeriodLabel}</span>}
+                {challengePeriodLabel && challengeSummary.paired_samples ? <span> · </span> : null}
+                {challengeSummary.paired_samples ? <span>{challengeSummary.paired_samples.toLocaleString(localeForLanguage(language))} {t('challengeComparableSamples')}</span> : null}
+              </div>
+            </>
+          ) : null}
+        </div>
+      </section>
       <header className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-5 mb-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-5">
