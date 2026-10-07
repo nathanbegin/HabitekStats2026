@@ -239,13 +239,10 @@ const supabase = supabaseUrl && supabaseAnonKey
 function AppContent() {
   const { t, language } = useTranslation(); // Now useTranslation is called within the context provider
 
-  // Default custom range to display data immediately on load.
-  const nowForDefaultRange = new Date();
-  const startForDefaultRange = new Date(nowForDefaultRange.getTime() - 24 * 60 * 60 * 1000);
-  const toDateTimeLocal = (date) =>
-    new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-  const defaultStart = toDateTimeLocal(startForDefaultRange);
-  const defaultEnd = toDateTimeLocal(nowForDefaultRange);
+  // The 2026 challenge is complete: historical/comparison charts open on the
+  // official analysis period by default. Users can still select any other range.
+  const defaultStart = "2026-09-03T00:00";
+  const defaultEnd = "2026-09-30T23:59";
 
   const [building, setBuilding] = useState("Code"); // Currently selected building for the main chart
   const [data, setData] = useState([]); // Stores data for the currently selected building for charts
