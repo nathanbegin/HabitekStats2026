@@ -12,6 +12,9 @@ const COLORS = {
   code: '#be1622',
   passive: '#f2b705',
   outside: '#ef7d22',
+  humidityCode: '#7c3aed',
+  humidityPassive: '#14b8a6',
+  humidityOutside: '#2563eb',
   ink: '#111827',
   muted: '#64748b',
   grid: '#e5e7eb',
@@ -352,14 +355,23 @@ function combinedOptions(data, lang) {
 
   return {
     ...baseOptions(t.combinedTitle, t.subtitle, lang),
+    // Give every series its own visual identity. The series names stay the
+    // same, but no two lines share both the same colour and line pattern.
     colors: [
-      COLORS.code, COLORS.passive, COLORS.outside,
-      COLORS.code, COLORS.passive, COLORS.outside,
+      COLORS.code,
+      COLORS.passive,
+      COLORS.outside,
+      COLORS.humidityCode,
+      COLORS.humidityPassive,
+      COLORS.humidityOutside,
     ],
     stroke: {
-      width: [2.5, 2.5, 2.2, 2, 2, 1.9],
+      width: [3.0, 2.7, 2.5, 2.4, 2.4, 2.4],
       curve: 'straight',
-      dashArray: [0, 0, 0, 6, 6, 6],
+      // Distinct patterns for all six series:
+      // solid, fine dash, long dash, dotted, medium dash, long-spaced dash.
+      dashArray: [0, 3, 9, 2, 6, 12],
+      lineCap: 'round',
     },
     yaxis: [
       tempAxis(true, t.codeTemp),
