@@ -355,8 +355,7 @@ function combinedOptions(data, lang) {
 
   return {
     ...baseOptions(t.combinedTitle, t.subtitle, lang),
-    // Give every series its own visual identity. The series names stay the
-    // same, but no two lines share both the same colour and line pattern.
+    // Give every series its own colour while keeping every curve solid.
     colors: [
       COLORS.code,
       COLORS.passive,
@@ -368,9 +367,7 @@ function combinedOptions(data, lang) {
     stroke: {
       width: [3.0, 2.7, 2.5, 2.4, 2.4, 2.4],
       curve: 'straight',
-      // Distinct patterns for all six series:
-      // solid, fine dash, long dash, dotted, medium dash, long-spaced dash.
-      dashArray: [0, 3, 9, 2, 6, 12],
+      dashArray: [0, 0, 0, 0, 0, 0],
       lineCap: 'round',
     },
     yaxis: [
@@ -393,12 +390,12 @@ function triggerDownload(dataUri, filename) {
   anchor.remove();
 }
 
-async function renderAndDownload({ options, series, filename, height = 680 }) {
+async function renderAndDownload({ options, series, filename, width = 1400, height = 680 }) {
   const host = document.createElement('div');
   host.style.position = 'fixed';
   host.style.left = '-20000px';
   host.style.top = '0';
-  host.style.width = '1400px';
+  host.style.width = `${width}px`;
   host.style.height = `${height}px`;
   host.style.background = '#ffffff';
   document.body.appendChild(host);
@@ -407,7 +404,7 @@ async function renderAndDownload({ options, series, filename, height = 680 }) {
     ...options,
     chart: {
       ...options.chart,
-      width: 1400,
+      width,
       height,
     },
     series,
@@ -474,7 +471,8 @@ async function downloadChallengeCharts() {
       options: combinedOptions(data, lang),
       series: combinedSeries,
       filename: 'ICEBOX-2026_temperature-humidite-interieur-exterieur_03-30-septembre.png',
-      height: 760,
+      width: 1600,
+      height: 900,
     });
 
     button.textContent = t.done;
